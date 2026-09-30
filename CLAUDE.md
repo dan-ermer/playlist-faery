@@ -31,7 +31,7 @@ Playlist Faery frees playlists that are stuck inside social media posts. When so
 Intake → Capture → Parse → Match → Build playlist → Approval email → (Dan approves) → Distribute → Catalog
 ```
 
-1. **Intake**: Dan shares a post link (or a screenshot) from his phone to the intake email address. Resend receives it and calls our webhook.
+1. **Intake**: Dan shares a post link (or a screenshot) from his phone to the intake email address. Resend receives it and calls our webhook (`/api/inbound/resend`, event `email.received`). Only senders in `ALLOWED_SENDERS` are processed; others are logged and ignored.
 2. **Capture**: pull the post text (Threads public post page; X API post read in Phase 3). If an image holds the list, Claude vision reads it.
 3. **Parse**: Claude API returns structured data: list type, items (artist/title/album), poster handle, suggested playlist title.
 4. **Match**: Spotify search per item, with Claude choosing among results when needed (the artist top-tracks endpoint no longer exists; search returns max 10 results).
@@ -54,7 +54,7 @@ Every post's status is recorded at each step, so nothing stalls unnoticed. A sch
 | Social | Threads API (Phase 2), X API (Phase 3, pay-per-use) |
 | DNS / domain | Cloudflare (DNS only, no proxy, on Vercel records) |
 
-Domain: **playlistfaery.com**. Handle everywhere: **@playlistfaery**. Contact address: hello@playlistfaery.com (Cloudflare Email Routing → Faery Gmail). Intake address lives on `in.playlistfaery.com` (confirm the exact address with Dan).
+Domain: **playlistfaery.com**. Handle everywhere: **@playlistfaery**. Contact address: hello@playlistfaery.com (Cloudflare Email Routing → Faery Gmail). Intake address: **add@in.playlistfaery.com** (official). Anything sent to `@in.playlistfaery.com` is accepted.
 
 ## Environment variables
 
@@ -62,11 +62,12 @@ Stored in Vercel (Production, Preview, Development). Pull locally with `vercel e
 
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: safe for the browser
 - `SUPABASE_SECRET_KEY`: full database access; **server-only**, never import into client components
-- `RESEND_API_KEY`
+- `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`
+- `ALLOWED_SENDERS`: comma-separated addresses whose forwards are processed
 - `ANTHROPIC_API_KEY`
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`
 - `THREADS_APP_ID`, `THREADS_APP_SECRET`
-- Not yet created: X API keys (Phase 3), `CRON_SECRET`, Resend webhook signing secret, Spotify/Threads stored tokens
+- Not yet created: X API keys (Phase 3), `CRON_SECRET`, Spotify/Threads stored tokens
 
 If a new secret is needed, tell Dan the variable name and where to get the value; he adds it in Vercel.
 
@@ -98,7 +99,7 @@ Phase 1 checklist: posts table and statuses → inbound email handler → post c
 
 ## Conventions
 
-- TypeScript everywhere; server logic in Route Handlers under `src/app/api/...` and shared modules under `src/lib/...`.
+- TypeScript everywhere; server logic in Route Handlers under `app/api/...` and shared modules under `lib/...` (no `src/` folder).
 - Every step is **idempotent**: safe to re-run on the same post without creating duplicate playlists, emails or replies. Check status and stored IDs before acting.
 - Verify webhook signatures (Resend) and protect cron routes with `CRON_SECRET`.
 - Keep third-party calls behind small wrapper modules (`lib/spotify.ts`, `lib/claude.ts`, `lib/resend.ts`, `lib/threads.ts`) so they're easy to test and swap.
