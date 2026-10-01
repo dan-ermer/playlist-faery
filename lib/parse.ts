@@ -132,7 +132,6 @@ export function parsePost(postId: string): Promise<StepResult> {
       if (items.length === 0) {
         throw new PermanentError("Claude found no songs, artists, albums or playlist link in the post");
       }
-      if (parsed.notes) console.log("[parse] notes", { postId, notes: parsed.notes });
 
       const db = supabaseAdmin();
       const { error: delError } = await db.from("post_items").delete().eq("post_id", post.id);
@@ -152,6 +151,7 @@ export function parsePost(postId: string): Promise<StepResult> {
       return {
         list_type: parsed.list_type,
         playlist_title: parsed.playlist_title,
+        parse_notes: parsed.notes,
         // Screenshot-only posts: take the handle Claude read from the image.
         ...(!post.author_handle && parsed.author_handle
           ? { author_handle: parsed.author_handle.replace(/^@/, "") }

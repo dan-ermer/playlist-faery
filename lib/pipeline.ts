@@ -1,5 +1,6 @@
 import "server-only";
 import { capturePost } from "@/lib/capture";
+import { matchPost } from "@/lib/match";
 import { parsePost } from "@/lib/parse";
 import type { PostStatus, StepResult } from "@/lib/step";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -7,6 +8,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 const STEPS: Partial<Record<PostStatus, (postId: string) => Promise<StepResult>>> = {
   received: capturePost,
   captured: parsePost,
+  parsed: matchPost,
 };
 
 // Moves a post through as many steps as it can right now. Stops when a step
