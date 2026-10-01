@@ -24,8 +24,9 @@ export function creditLine(post: Pick<BuildRow, "author_handle" | "source_platfo
 }
 
 // Build step: matched -> built.
-// Creates a private playlist on the Faery Spotify account (made public only
-// after Dan approves) with the matched tracks in the poster's order.
+// Creates a playlist on the Faery Spotify account with the matched tracks in
+// the poster's order. It asks for private, but Spotify currently makes it
+// public anyway (see createPlaylist).
 // The playlist id is saved as soon as the playlist exists, so a retry reuses
 // it instead of creating a duplicate; setting the tracks replaces them.
 export function buildPost(postId: string): Promise<StepResult> {
