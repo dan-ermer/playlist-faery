@@ -1,12 +1,12 @@
 import "server-only";
-import { PermanentError } from "@/lib/errors";
+import { PermanentError, WaitError } from "@/lib/errors";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // Temporary failures are retried this many times per step before the post is marked failed.
 export const MAX_ATTEMPTS = 3;
 
 export type PostStatus =
-  | "received" | "captured" | "parsed" | "matched" | "awaiting_approval"
+  | "received" | "captured" | "parsed" | "matched" | "built" | "awaiting_approval"
   | "approved" | "published" | "rejected" | "failed";
 
 export type StepResult = "advanced" | "skipped" | "retry" | "failed";
@@ -48,6 +48,11 @@ export async function runStep<Row>(
     return "advanced";
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof WaitError) {
+      await db.from("posts").update({ error: `${step}: ${message}` }).eq("id", postId).eq("status", from);
+      console.warn(`[${step}] waiting`, { postId, message });
+      return "retry";
+    }
     const attempts = (post.attempts ?? 0) + 1;
     const giveUp = err instanceof PermanentError || attempts >= MAX_ATTEMPTS;
     await db
