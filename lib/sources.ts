@@ -2,6 +2,8 @@
 // Threads: the public post page (og: tags). X: the free oEmbed endpoint.
 // Neither needs API keys.
 
+import { PermanentError } from "./errors";
+
 export type Platform = "threads" | "x" | "instagram";
 
 export type SourcePost = {
@@ -11,8 +13,6 @@ export type SourcePost = {
   text: string;
 };
 
-// Thrown for problems retrying won't fix (post deleted, unsupported link...).
-export class PermanentCaptureError extends Error {}
 
 const USER_AGENT = "Mozilla/5.0 (compatible; PlaylistFaery/1.0; +https://playlistfaery.com)";
 const TIMEOUT_MS = 15_000;
@@ -88,7 +88,7 @@ export async function fetchThreadsPost(link: string): Promise<SourcePost> {
     redirect: "follow",
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (res.status === 404) throw new PermanentCaptureError("Threads post not found (deleted or private?)");
+  if (res.status === 404) throw new PermanentError("Threads post not found (deleted or private?)");
   if (!res.ok) throw new Error(`Threads returned HTTP ${res.status}`);
   return parseThreadsPage(await res.text());
 }
@@ -107,14 +107,14 @@ export function parseXOembed(json: { url?: string; author_url?: string; html?: s
 
 export async function fetchXPost(link: string): Promise<SourcePost> {
   const m = link.match(/(?:x|twitter)\.com\/([^/]+)\/status\/(\d+)/);
-  if (!m) throw new PermanentCaptureError(`Not an X post link: ${link}`);
+  if (!m) throw new PermanentError(`Not an X post link: ${link}`);
   const postUrl = `https://x.com/${m[1]}/status/${m[2]}`;
   const res = await fetch(
     `https://publish.x.com/oembed?omit_script=true&dnt=true&url=${encodeURIComponent(postUrl)}`,
     { headers: { "user-agent": USER_AGENT }, signal: AbortSignal.timeout(TIMEOUT_MS) },
   );
   if (res.status === 404 || res.status === 403) {
-    throw new PermanentCaptureError("X post not found (deleted or protected account?)");
+    throw new PermanentError("X post not found (deleted or protected account?)");
   }
   if (!res.ok) throw new Error(`X oEmbed returned HTTP ${res.status}`);
   return parseXOembed(await res.json());

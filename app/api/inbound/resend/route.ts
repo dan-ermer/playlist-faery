@@ -1,13 +1,13 @@
 import { after } from "next/server";
-import { capturePost } from "@/lib/capture";
 import { decideIntake } from "@/lib/intake";
+import { advancePost } from "@/lib/pipeline";
 import { verifyWebhook } from "@/lib/resend";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // Resend calls this for every email received on in.playlistfaery.com.
 // The webhook only carries the envelope (sender, recipients, subject, email_id);
-// the Capture step fetches the body using intake_message_id. It starts right after
-// we respond; the scheduled function retries it if it doesn't finish.
+// the pipeline (Capture, Parse, ...) starts right after we respond; the scheduled
+// function retries anything that doesn't finish.
 //
 // Responses: 401 for a bad signature, 200 for anything handled or deliberately
 // ignored (so Resend doesn't retry it), 500 when saving fails (so Resend retries).
@@ -57,9 +57,9 @@ export async function POST(request: Request) {
     return new Response("Failed to save", { status: 500 });
   }
 
-  // A redelivered webhook inserts nothing, so capture isn't started twice.
+  // A redelivered webhook inserts nothing, so the pipeline isn't started twice.
   const postId = inserted?.[0]?.id;
-  if (postId) after(() => capturePost(postId));
+  if (postId) after(() => advancePost(postId));
 
   console.log("[inbound] received", { from: decision.from, email_id: email.email_id, postId });
   return Response.json({ ok: true });

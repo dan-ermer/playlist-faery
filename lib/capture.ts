@@ -1,68 +1,32 @@
 import "server-only";
+import { PermanentError } from "@/lib/errors";
 import { getReceivedEmail } from "@/lib/resend";
-import {
-  fetchThreadsPost,
-  fetchXPost,
-  findSourceLink,
-  htmlToText,
-  PermanentCaptureError,
-  type SourcePost,
-} from "@/lib/sources";
+import { fetchThreadsPost, fetchXPost, findSourceLink, htmlToText, type SourcePost } from "@/lib/sources";
+import { runStep, type StepResult } from "@/lib/step";
 import { supabaseAdmin } from "@/lib/supabase";
-
-// Temporary failures are retried this many times before the post is marked failed.
-export const MAX_CAPTURE_ATTEMPTS = 3;
-
-export type CaptureResult = "captured" | "skipped" | "retry" | "failed";
 
 // Capture step: received -> captured.
 // Reads the forwarded email, checks it really came from the sender (DMARC),
 // finds the post link and/or screenshot, and stores the post's text and author.
-// Safe to call repeatedly: it only acts on posts still in `received`. Never throws.
-export async function capturePost(postId: string): Promise<CaptureResult> {
-  const db = supabaseAdmin();
-  const { data: post, error: loadError } = await db
-    .from("posts")
-    .select("id, status, intake_message_id, attempts")
-    .eq("id", postId)
-    .single();
-  if (loadError || !post) {
-    console.error("[capture] could not load post", { postId, loadError });
-    return "skipped";
-  }
-  if (post.status !== "received" || !post.intake_message_id) return "skipped";
-
-  try {
-    const fields = await captureFields(post.intake_message_id);
-    const { error } = await db
-      .from("posts")
-      .update({ ...fields, status: "captured", error: null })
-      .eq("id", postId)
-      .eq("status", "received");
-    if (error?.code === "23505") {
-      // source_url is unique: this post was already forwarded.
-      const { data: original } = await db
-        .from("posts")
-        .select("id")
-        .eq("source_url", fields.source_url!)
-        .single();
-      throw new PermanentCaptureError(`Already forwarded (duplicate of post ${original?.id ?? "unknown"})`);
-    }
-    if (error) throw new Error(`Database update failed: ${error.message}`);
-    console.log("[capture] captured", { postId, source_url: fields.source_url });
-    return "captured";
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const attempts = (post.attempts ?? 0) + 1;
-    const giveUp = err instanceof PermanentCaptureError || attempts >= MAX_CAPTURE_ATTEMPTS;
-    await db
-      .from("posts")
-      .update({ attempts, error: `capture: ${message}`, ...(giveUp ? { status: "failed" } : {}) })
-      .eq("id", postId)
-      .eq("status", "received");
-    console.warn(`[capture] ${giveUp ? "failed" : "will retry"}`, { postId, attempts, message });
-    return giveUp ? "failed" : "retry";
-  }
+export function capturePost(postId: string): Promise<StepResult> {
+  return runStep<{ intake_message_id: string | null }>(
+    "capture", postId, "received", "captured", "intake_message_id",
+    async (post) => {
+      if (!post.intake_message_id) throw new PermanentError("Post has no intake email");
+      const fields = await captureFields(post.intake_message_id);
+      if (fields.source_url) {
+        // source_url is unique; name the original so Dan can find it.
+        const { data: original } = await supabaseAdmin()
+          .from("posts")
+          .select("id")
+          .eq("source_url", fields.source_url)
+          .neq("id", post.id)
+          .maybeSingle();
+        if (original) throw new PermanentError(`Already forwarded (duplicate of post ${original.id})`);
+      }
+      return fields;
+    },
+  );
 }
 
 type CapturedFields = {
@@ -78,7 +42,7 @@ async function captureFields(emailId: string): Promise<CapturedFields> {
 
   // The From address can be forged; DMARC proves the sender's domain sent it.
   if (email.authentication.dmarc !== "pass") {
-    throw new PermanentCaptureError(
+    throw new PermanentError(
       `Sender authentication failed (dmarc: ${email.authentication.dmarc ?? "missing"})`,
     );
   }
@@ -114,9 +78,9 @@ async function captureFields(emailId: string): Promise<CapturedFields> {
     };
   }
   if (link?.platform === "instagram") {
-    throw new PermanentCaptureError(
+    throw new PermanentError(
       "Instagram links can't be read yet (Phase 4). Forward a screenshot of the post instead.",
     );
   }
-  throw new PermanentCaptureError("No Threads/X link or screenshot found in the email");
+  throw new PermanentError("No Threads/X link or screenshot found in the email");
 }
