@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { decideIntake } from "@/lib/intake";
-import { advancePost } from "@/lib/pipeline";
+import { advancePost, advanceStalePosts } from "@/lib/pipeline";
 import { verifyWebhook } from "@/lib/resend";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -59,7 +59,12 @@ export async function POST(request: Request) {
 
   // A redelivered webhook inserts nothing, so the pipeline isn't started twice.
   const postId = inserted?.[0]?.id;
-  if (postId) after(() => advancePost(postId));
+  // Each new post also nudges any others that got stuck (the daily cron is the
+  // fallback; Vercel Hobby only allows crons once a day).
+  if (postId) after(async () => {
+    await advancePost(postId);
+    await advanceStalePosts();
+  });
 
   console.log("[inbound] received", { from: decision.from, email_id: email.email_id, postId });
   return Response.json({ ok: true });

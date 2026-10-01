@@ -27,3 +27,37 @@ export async function advancePost(postId: string): Promise<PostStatus | null> {
   }
   return status();
 }
+
+// Statuses with an automatic next step (see STEPS).
+const AUTOMATIC = Object.keys(STEPS) as PostStatus[];
+
+// Retries posts stuck in an automatic status, oldest first. Only touches posts
+// not updated for `staleMinutes`, so it never races the webhook's own run, and
+// claims each one (an updated_at compare-and-set) so two sweeps can't both
+// work on it — which matters for Build, where a race could create two playlists.
+export async function advanceStalePosts({ staleMinutes = 10, limit = 20 } = {}) {
+  const db = supabaseAdmin();
+  const cutoff = new Date(Date.now() - staleMinutes * 60_000).toISOString();
+  const { data: stale, error } = await db
+    .from("posts")
+    .select("id, status, updated_at")
+    .in("status", AUTOMATIC)
+    .lt("updated_at", cutoff)
+    .order("updated_at")
+    .limit(limit);
+  if (error) throw new Error(`Could not list stale posts: ${error.message}`);
+
+  const results: { id: string; from: PostStatus; to: PostStatus | null }[] = [];
+  for (const post of stale ?? []) {
+    const { data: claimed } = await db
+      .from("posts")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", post.id)
+      .eq("updated_at", post.updated_at)
+      .select("id");
+    if (!claimed?.length) continue; // someone else got it
+    results.push({ id: post.id, from: post.status, to: await advancePost(post.id) });
+  }
+  if (results.length) console.log("[sweep] advanced stale posts", results);
+  return results;
+}

@@ -42,7 +42,7 @@ Statuses: received → captured → parsed → matched → built → awaiting_ap
 7. **Distribute** (Phase 2+): reply to the original post with the link, and publish a Faery post linking back. Both credit the poster.
 8. **Catalog** (Phase 2): the public page on playlistfaery.com lists every published playlist.
 
-Every post's status is recorded at each step, so nothing stalls unnoticed. `lib/pipeline.ts` `advancePost()` runs the automatic steps in order; each step uses `runStep()` (`lib/step.ts`), which guards on status, resets `attempts` on success, and marks the post `failed` after 3 temporary errors or one `PermanentError`. A scheduled function (Vercel Cron) advances rows between statuses and retries failures. There's no separate workflow engine.
+Every post's status is recorded at each step, so nothing stalls unnoticed. `lib/pipeline.ts` `advancePost()` runs the automatic steps in order; each step uses `runStep()` (`lib/step.ts`), which guards on status, resets `attempts` on success, and marks the post `failed` after 3 temporary errors or one `PermanentError`. A scheduled function (Vercel Cron) advances rows between statuses and retries failures. There's no separate workflow engine. The Vercel account is on **Hobby**, which allows crons only once a day, so `/api/cron/advance` runs daily (`vercel.json`, 14:00 UTC, protected by `CRON_SECRET`) and every accepted inbound email also calls `advanceStalePosts()` after its own post. The sweep only touches posts in an automatic status untouched for 10+ minutes and claims each with an `updated_at` compare-and-set, so it never runs Build twice on the same post. Upgrading to Pro would allow a `*/5 * * * *` schedule.
 
 ## Stack
 
@@ -69,7 +69,8 @@ Stored in Vercel (Production, Preview, Development). Pull locally with `vercel e
 - `ANTHROPIC_API_KEY`
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`
 - `THREADS_APP_ID`, `THREADS_APP_SECRET`
-- Not yet created: X API keys (Phase 3), `CRON_SECRET`, Threads stored tokens. (Spotify's stored login lives in the `oauth_tokens` table, not an env var.)
+- `CRON_SECRET`: Vercel Cron sends it as `Authorization: Bearer <secret>`
+- Not yet created: X API keys (Phase 3), Threads stored tokens. (Spotify's stored login lives in the `oauth_tokens` table, not an env var.)
 
 If a new secret is needed, tell Dan the variable name and where to get the value; he adds it in Vercel.
 
