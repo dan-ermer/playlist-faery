@@ -110,7 +110,15 @@ function describe(c: Candidates, refs: Map<string, SpotifyTrack>): string {
   return lines.join("\n");
 }
 
-type ItemResult = { spotify_track_id: string | null; spotify_uri: string | null; matched: boolean; match_note: string | null };
+type ItemResult = {
+  spotify_track_id: string | null;
+  spotify_uri: string | null;
+  spotify_track_name: string | null;
+  spotify_artists: string | null;
+  spotify_album: string | null;
+  matched: boolean;
+  match_note: string | null;
+};
 
 async function chooseWithClaude(candidates: Candidates[]): Promise<Map<number, ItemResult>> {
   const refs = new Map<string, SpotifyTrack>();
@@ -135,6 +143,9 @@ async function chooseWithClaude(candidates: Candidates[]): Promise<Map<number, I
     results.set(pick.position, {
       spotify_track_id: track?.id ?? null,
       spotify_uri: track?.uri ?? null,
+      spotify_track_name: track?.name ?? null,
+      spotify_artists: track ? track.artists.map((a) => a.name).join(", ") : null,
+      spotify_album: track?.album.name ?? null,
       matched: !!track,
       match_note: track ? pick.note : (pick.note ?? (pick.candidate ? `Unknown candidate ${pick.candidate}` : "No match chosen")),
     });
@@ -192,6 +203,9 @@ export function matchPost(postId: string): Promise<StepResult> {
         const result: ItemResult = picks.get(c.item.position) ?? {
           spotify_track_id: null,
           spotify_uri: null,
+          spotify_track_name: null,
+          spotify_artists: null,
+          spotify_album: null,
           matched: false,
           match_note: NOT_SEARCHABLE[c.kind] ?? "No pick returned for this item",
         };

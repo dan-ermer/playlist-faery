@@ -1,4 +1,5 @@
 import "server-only";
+import { sendApprovalEmail } from "@/lib/approval";
 import { buildPost } from "@/lib/build";
 import { capturePost } from "@/lib/capture";
 import { matchPost } from "@/lib/match";
@@ -11,6 +12,7 @@ const STEPS: Partial<Record<PostStatus, (postId: string) => Promise<StepResult>>
   captured: parsePost,
   parsed: matchPost,
   matched: buildPost,
+  built: sendApprovalEmail,
 };
 
 // Moves a post through as many steps as it can right now. Stops when a step
