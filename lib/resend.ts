@@ -12,6 +12,20 @@ export function resend() {
   return client;
 }
 
+export type EmailAuthentication = { spf?: string; dkim?: string; dmarc?: string };
+
+// Full received email (body, attachments, SPF/DKIM/DMARC results).
+// `authentication` is returned by the API but missing from the SDK's types.
+export async function getReceivedEmail(emailId: string) {
+  const { data, error } = await resend().emails.receiving.get(emailId);
+  if (error || !data) {
+    throw new Error(`Resend: could not fetch email ${emailId}: ${error?.message ?? "no data"}`);
+  }
+  const authentication =
+    (data as { authentication?: EmailAuthentication }).authentication ?? {};
+  return { ...data, authentication };
+}
+
 // Checks the Svix signature Resend puts on every webhook. `rawBody` must be the
 // exact request body text: re-serialized JSON will not match the signature.
 // Throws if the signature is missing or invalid.

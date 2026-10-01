@@ -32,7 +32,7 @@ Intake → Capture → Parse → Match → Build playlist → Approval email →
 ```
 
 1. **Intake**: Dan shares a post link (or a screenshot) from his phone to the intake email address. Resend receives it and calls our webhook (`/api/inbound/resend`, event `email.received`). Only senders in `ALLOWED_SENDERS` are processed; others are logged and ignored.
-2. **Capture**: pull the post text (Threads public post page; X API post read in Phase 3). If an image holds the list, Claude vision reads it.
+2. **Capture**: require DMARC pass on the forwarded email, then pull the post text (Threads: public post page og: tags; X: free oEmbed at publish.x.com, no API key). Screenshots stay in Resend; `screenshot_path` is `resend:<email_id>/<attachment_id>`. Instagram links need a screenshot until Phase 4. Runs from the webhook via `after()`; temporary errors retry up to 3 times. If an image holds the list, Claude vision reads it at Parse.
 3. **Parse**: Claude API returns structured data: list type, items (artist/title/album), poster handle, suggested playlist title.
 4. **Match**: Spotify search per item, with Claude choosing among results when needed (the artist top-tracks endpoint no longer exists; search returns max 10 results).
 5. **Build**: create the playlist on the Faery Spotify account with a credit line in the description; save the URL; record unmatched items.

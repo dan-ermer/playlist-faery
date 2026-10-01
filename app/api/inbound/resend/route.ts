@@ -1,10 +1,13 @@
+import { after } from "next/server";
+import { capturePost } from "@/lib/capture";
 import { decideIntake } from "@/lib/intake";
 import { verifyWebhook } from "@/lib/resend";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // Resend calls this for every email received on in.playlistfaery.com.
 // The webhook only carries the envelope (sender, recipients, subject, email_id);
-// the Capture step fetches the body later using intake_message_id.
+// the Capture step fetches the body using intake_message_id. It starts right after
+// we respond; the scheduled function retries it if it doesn't finish.
 //
 // Responses: 401 for a bad signature, 200 for anything handled or deliberately
 // ignored (so Resend doesn't retry it), 500 when saving fails (so Resend retries).
@@ -37,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   // intake_message_id is unique, so a re-delivered webhook is a no-op.
-  const { error } = await supabaseAdmin()
+  const { data: inserted, error } = await supabaseAdmin()
     .from("posts")
     .upsert(
       {
@@ -46,13 +49,18 @@ export async function POST(request: Request) {
         intake_subject: email.subject,
       },
       { onConflict: "intake_message_id", ignoreDuplicates: true },
-    );
+    )
+    .select("id");
 
   if (error) {
     console.error("[inbound] failed to save post", { email_id: email.email_id, error });
     return new Response("Failed to save", { status: 500 });
   }
 
-  console.log("[inbound] received", { from: decision.from, email_id: email.email_id });
+  // A redelivered webhook inserts nothing, so capture isn't started twice.
+  const postId = inserted?.[0]?.id;
+  if (postId) after(() => capturePost(postId));
+
+  console.log("[inbound] received", { from: decision.from, email_id: email.email_id, postId });
   return Response.json({ ok: true });
 }
