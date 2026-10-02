@@ -1,5 +1,6 @@
 import "server-only";
 import { decide, escapeHtml as e, postForToken, type Decision } from "@/lib/approval";
+import { advancePost } from "@/lib/pipeline";
 
 const LABELS: Record<Decision, { verb: string; done: string; color: string }> = {
   approve: { verb: "Approve", done: "Approved", color: "#1a7f4b" },
@@ -55,7 +56,18 @@ export function decisionRoute(decision: Decision) {
       if (!result.ok) {
         return page(200, `<p>${describe(result.post)} was already decided; nothing changed.</p>${playlistLink(result.post)}`);
       }
-      return page(200, `<p>✓ ${done} ${describe(result.post)}.</p>${playlistLink(result.post)}`);
+      if (decision === "reject") return page(200, `<p>✓ ${done} ${describe(result.post)}.</p>`);
+      // Approved: build the playlist now so the link can be shown. If Spotify
+      // is unavailable, the post stays approved and the sweep builds it later.
+      await advancePost(result.post.id);
+      const built = await postForToken(token);
+      return page(
+        200,
+        `<p>✓ ${done} ${describe(result.post)}.</p>` +
+          (built?.spotify_playlist_url
+            ? playlistLink(built)
+            : "<p>The playlist will be created on Spotify shortly.</p>"),
+      );
     } catch (err) {
       console.error(`[${decision}] failed`, err);
       return page(500, "<p>Something went wrong saving that. Please try again in a minute.</p>");

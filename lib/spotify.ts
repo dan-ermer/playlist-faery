@@ -259,10 +259,7 @@ export async function createPlaylist(name: string, description: string): Promise
   const playlist = await userRequest<{ id: string; external_urls: { spotify: string } }>("POST", "/me/playlists", {
     name,
     description,
-    // Spotify currently ignores `public` from this app (dev mode, observed Oct 2026):
-    // playlists come out public. Dan accepted that; we still ask for private so the
-    // "nothing public before approval" rule applies again if Spotify starts honoring it.
-    public: false,
+    public: true, // only created after Dan approves
   });
   return { id: playlist.id, url: playlist.external_urls.spotify };
 }
@@ -273,7 +270,3 @@ export async function replacePlaylistItems(playlistId: string, uris: string[]): 
   await userRequest("PUT", `/playlists/${playlistId}/items`, { uris });
 }
 
-// Called on approval. Currently a no-op on Spotify's side (see createPlaylist).
-export async function setPlaylistPublic(playlistId: string, isPublic: boolean): Promise<void> {
-  await userRequest("PUT", `/playlists/${playlistId}`, { public: isPublic });
-}

@@ -47,15 +47,14 @@ export function playlistName(
     .join(" - ");
 }
 
-// Build step: matched -> built.
-// Creates a playlist on the Faery Spotify account with the matched tracks in
-// the poster's order. It asks for private, but Spotify currently makes it
-// public anyway (see createPlaylist).
+// Build step: approved -> built (runs only after Dan approves).
+// Creates a public playlist on the Faery Spotify account with the matched
+// tracks in the poster's order.
 // The playlist id is saved as soon as the playlist exists, so a retry reuses
 // it instead of creating a duplicate; setting the tracks replaces them.
 export function buildPost(postId: string): Promise<StepResult> {
   return runStep<BuildRow>(
-    "build", postId, "matched", "built",
+    "build", postId, "approved", "built",
     "playlist_title, author_handle, source_platform, source_url, spotify_playlist_id, posted_on",
     async (post) => {
       const db = supabaseAdmin();

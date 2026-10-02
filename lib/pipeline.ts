@@ -11,8 +11,9 @@ const STEPS: Partial<Record<PostStatus, (postId: string) => Promise<StepResult>>
   received: capturePost,
   captured: parsePost,
   parsed: matchPost,
-  matched: buildPost,
-  built: sendApprovalEmail,
+  matched: sendApprovalEmail,
+  // Build runs after Dan approves (the approve page starts it; the sweep retries it).
+  approved: buildPost,
 };
 
 // Moves a post through as many steps as it can right now. Stops when a step

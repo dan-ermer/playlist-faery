@@ -1,3 +1,4 @@
+import { warnIfNearPlaylistLimit } from "@/lib/limits";
 import { advanceStalePosts } from "@/lib/pipeline";
 
 // Gives the sweep time to work through several posts (Claude + Spotify calls).
@@ -12,5 +13,6 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
   const results = await advanceStalePosts();
-  return Response.json({ ok: true, advanced: results });
+  const playlists = await warnIfNearPlaylistLimit();
+  return Response.json({ ok: true, advanced: results, playlists });
 }

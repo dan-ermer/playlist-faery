@@ -1,7 +1,7 @@
 import "server-only";
 import { PermanentError } from "@/lib/errors";
 import { resend } from "@/lib/resend";
-import { setPlaylistPublic } from "@/lib/spotify";
+import { PLAYLIST_LIMIT, playlistCount } from "@/lib/limits";
 import { runStep, type StepResult } from "@/lib/step";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -38,7 +38,7 @@ export const escapeHtml = (s: string) =>
 const PLATFORM_NAMES: Record<string, string> = { threads: "Threads", x: "X" };
 
 // Builds the approval email (HTML and plain text) for one post.
-export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[]) {
+export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[], playlistsSoFar: number) {
   const e = escapeHtml;
   const title = post.playlist_name ?? post.playlist_title ?? "Untitled playlist";
   const who = post.author_handle ? `@${post.author_handle}` : "unknown poster";
@@ -72,7 +72,7 @@ ${post.parse_notes ? `<p style="background:#fff8e1;padding:10px 12px;border-radi
 <h3 style="margin:20px 0 8px">Tracklist</h3>
 <ol style="padding-left:22px;margin:0">${matched.map(trackLine).join("")}</ol>
 ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.length})</h3><ul style="padding-left:22px;margin:0">${unmatched.map((i) => `<li style="margin-bottom:8px">${e(i.raw_text)}<br><span style="color:#8a6d00">${e(i.match_note ?? "No match")}</span></li>`).join("")}</ul>` : ""}
-<p style="margin-top:24px;color:#999;font-size:13px">Approving marks the post approved. Nothing is posted to Threads or X yet (Phase 2).</p>
+<p style="margin-top:24px;color:#999;font-size:13px">Approving creates the playlist on Spotify. Nothing is posted to Threads or X yet (Phase 2).<br>Faery playlists so far: ${playlistsSoFar.toLocaleString("en-US")} of about ${PLAYLIST_LIMIT.toLocaleString("en-US")}.</p>
 </div></body></html>`;
 
   const text = [
@@ -91,6 +91,8 @@ ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.len
         `${n + 1}. ${i.spotify_track_name} - ${i.spotify_artists}  (wrote: ${i.raw_text})${i.match_note ? `  [! ${i.match_note}]` : ""}`,
     ),
     ...(unmatched.length ? [``, `NOT MATCHED`, ...unmatched.map((i) => `- ${i.raw_text}: ${i.match_note ?? "No match"}`)] : []),
+    ``,
+    `Approving creates the playlist on Spotify. Faery playlists so far: ${playlistsSoFar} of about ${PLAYLIST_LIMIT}.`,
   ]
     .filter((l) => l !== "")
     .join("\n");
@@ -98,12 +100,12 @@ ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.len
   return { subject, html, text };
 }
 
-// Approval email step: built -> awaiting_approval.
+// Approval email step: matched -> awaiting_approval (the playlist is built only after approval).
 // Emails the person who forwarded the post (always an ALLOWED_SENDERS address).
 // Resend's idempotency key makes a retry within 24h a no-op instead of a second email.
 export function sendApprovalEmail(postId: string): Promise<StepResult> {
   return runStep<Omit<ApprovalPost, "id">>(
-    "approval-email", postId, "built", "awaiting_approval",
+    "approval-email", postId, "matched", "awaiting_approval",
     "intake_from, playlist_title, playlist_name, author_handle, source_platform, source_url, spotify_playlist_url, approval_token, parse_notes",
     async (post) => {
       if (!post.intake_from) throw new PermanentError("No address to send the approval email to");
@@ -115,7 +117,7 @@ export function sendApprovalEmail(postId: string): Promise<StepResult> {
         .returns<ApprovalItem[]>();
       if (error) throw new Error(`Could not load items: ${error.message}`);
 
-      const { subject, html, text } = renderApprovalEmail(post, items ?? []);
+      const { subject, html, text } = renderApprovalEmail(post, items ?? [], await playlistCount());
       const { error: sendError } = await resend().emails.send(
         { from: FROM, to: post.intake_from, replyTo: REPLY_TO, subject, html, text },
         { idempotencyKey: `approval-email/${post.id}` },
@@ -151,17 +153,10 @@ export async function decide(token: string, decision: Decision) {
     .update(decision === "approve" ? { status: "approved", approved_at: new Date().toISOString() } : { status: "rejected" })
     .eq("id", post.id)
     .eq("status", "awaiting_approval")
-    .select("id, spotify_playlist_id");
+    .select("id");
   if (error) throw new Error(`Could not save decision: ${error.message}`);
   if (!updated?.length) return { ok: false as const, reason: "already" as const, post };
 
-  if (decision === "approve" && updated[0].spotify_playlist_id) {
-    // Currently a no-op on Spotify's side (playlists are already public); kept so
-    // the rule holds if Spotify starts honoring private playlists.
-    await setPlaylistPublic(updated[0].spotify_playlist_id, true).catch((err) =>
-      console.warn("[approve] could not set playlist public", { postId: post.id, err: String(err) }),
-    );
-  }
   console.log(`[${decision}]`, { postId: post.id });
   return { ok: true as const, post };
 }
