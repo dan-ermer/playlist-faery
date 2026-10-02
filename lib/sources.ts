@@ -185,5 +185,37 @@ export async function fetchInstagramPost(link: string): Promise<SourcePost> {
   if (!res.ok) throw new Error(`Instagram returned HTTP ${res.status}`);
   const post = parseInstagramPage(await res.text());
   if (!post.handle) throw new PermanentError("Couldn't find the poster's handle on the Instagram page");
-  return post;
+  // og:image is a 640px square crop, which cuts off long lists; the embed page
+  // has the whole picture. Carousels still only give the first slide.
+  return { ...post, imageUrl: (await fetchInstagramFullImage(post.url)) ?? post.imageUrl };
+}
+
+// Largest image in the post's embed page (its <img class="EmbeddedMediaImage">
+// srcset, e.g. up to 1104 or 1680px wide, uncropped). Best effort: null if missing.
+export function largestEmbedImage(html: string): string | null {
+  const tag = html.match(/<img[^>]*class="EmbeddedMediaImage"[^>]*>/)?.[0];
+  if (!tag) return null;
+  const srcset = tag.match(/srcset="([^"]*)"/)?.[1];
+  if (!srcset) {
+    const src = tag.match(/src="([^"]*)"/)?.[1];
+    return src ? decodeEntities(src) : null;
+  }
+  const best = decodeEntities(srcset)
+    .split(",")
+    .map((part) => part.trim().split(/\s+/))
+    .map(([url, width]) => ({ url, width: parseInt(width ?? "0", 10) || 0 }))
+    .sort((x, y) => y.width - x.width)[0];
+  return best?.url ?? null;
+}
+
+async function fetchInstagramFullImage(postUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${postUrl}embed/`, {
+      headers: { "user-agent": USER_AGENT, "accept-language": "en" },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    return res.ok ? largestEmbedImage(await res.text()) : null;
+  } catch {
+    return null;
+  }
 }
