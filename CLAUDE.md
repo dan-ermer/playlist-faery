@@ -110,7 +110,7 @@ Phase 1 checklist (status as of 2026-10-02):
 - [x] Playlist creation with credit and unmatched notes (after approval; `@handle - mm/dd/yy - title`)
 - [x] Approval email with Approve/Reject (two taps by design, see step 5)
 - [x] Scheduled function advancing statuses (daily cron + sweep on each forward), history and failure alerts
-- [ ] Test on ~10 real posts of each input type (done so far: ~15 song lists, ~8 artist lists, ~4 album lists, 5 screenshots, 2 X, 6 Instagram; still thin on X, albums and shared playlist links)
+- [ ] Test on ~10 real posts of each input type (33 posts so far: 10 song lists, 8 artist lists, 5 album lists; sources 16 Threads, 2 X, 4 screenshots, 3 Instagram links since support plus 7 before it; 21 built. Still thin on X, albums and shared playlist links)
 
 Extras built ahead of plan: public catalog homepage, Instagram source, playlist-cap counter.
 Known gaps: recreating shared playlist links (recorded as unmatched); carousels/reels need a screenshot; X posts whose list is only in an attached image.
