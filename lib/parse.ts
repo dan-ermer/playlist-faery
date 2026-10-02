@@ -24,6 +24,10 @@ export const ParsedPost = z.object({
     .nullable()
     .describe("The poster's handle without @, only if visible in a screenshot; otherwise null."),
   playlist_url: z.string().nullable().describe("For playlist_link posts, the linked playlist URL."),
+  posted_on: z
+    .string()
+    .nullable()
+    .describe("Only if a screenshot shows the post's full date (e.g. 'Sep 30, 2026' or '9/30/26'): that date as YYYY-MM-DD. Null for relative times like '2d' or when no date is shown."),
   items: z.array(
     z.object({
       raw_text: z.string().describe("The item exactly as written in the post, one line or entry."),
@@ -61,6 +65,7 @@ type ParseInput = {
   post_text: string | null;
   author_handle: string | null;
   screenshot_path: string | null;
+  posted_on?: string | null;
 };
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
@@ -121,7 +126,7 @@ export async function parseWithClaude(post: ParseInput): Promise<ParsedPost> {
 // so re-running never duplicates items) and the list type and title on the post.
 export function parsePost(postId: string): Promise<StepResult> {
   return runStep<ParseInput>(
-    "parse", postId, "captured", "parsed", "post_text, author_handle, screenshot_path",
+    "parse", postId, "captured", "parsed", "post_text, author_handle, screenshot_path, posted_on",
     async (post) => {
       const parsed = await parseWithClaude(post);
       if (!parsed.is_music_list || !parsed.list_type) {
@@ -158,6 +163,10 @@ export function parsePost(postId: string): Promise<StepResult> {
         list_type: parsed.list_type,
         playlist_title: parsed.playlist_title,
         parse_notes: parsed.notes,
+        // Screenshots: take the post date Claude read, if Capture didn't find one.
+        ...(!post.posted_on && parsed.posted_on && /^\d{4}-\d{2}-\d{2}$/.test(parsed.posted_on)
+          ? { posted_on: parsed.posted_on }
+          : {}),
         // Screenshot-only posts: take the handle Claude read from the image.
         ...(!post.author_handle && parsed.author_handle
           ? { author_handle: parsed.author_handle.replace(/^@/, "") }

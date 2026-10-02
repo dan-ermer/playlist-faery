@@ -35,6 +35,7 @@ type CapturedFields = {
   author_handle: string | null;
   post_text: string | null;
   screenshot_path: string | null;
+  posted_on?: string | null;
 };
 
 async function captureFields(emailId: string): Promise<CapturedFields> {
@@ -65,6 +66,7 @@ async function captureFields(emailId: string): Promise<CapturedFields> {
       author_handle: post.handle,
       post_text: post.text,
       screenshot_path,
+      posted_on: post.postedOn,
     };
   }
   if (screenshot_path) {

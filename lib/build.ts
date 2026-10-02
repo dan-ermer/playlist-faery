@@ -10,6 +10,7 @@ type BuildRow = {
   source_platform: string | null;
   source_url: string | null;
   spotify_playlist_id: string | null;
+  posted_on: string | null;
 };
 
 const PLATFORM_NAMES: Record<string, string> = { threads: "Threads", x: "X" };
@@ -23,6 +24,29 @@ export function creditLine(post: Pick<BuildRow, "author_handle" | "source_platfo
   return `Songs from ${who} on ${where}${link} · Freed by Playlist Faery · playlistfaery.com`;
 }
 
+// "2026-09-30" -> "09/30/26". Without a post date, today's date in Dan's time zone (US Eastern).
+export function shortDate(isoDate: string | null, now = new Date()): string {
+  const ymd =
+    isoDate ??
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, m, d] = ymd.split("-");
+  return `${m}/${d}/${y.slice(2)}`;
+}
+
+// Playlist name: "@handle - mm/dd/yy - title" (handle left out when unknown).
+export function playlistName(
+  post: Pick<BuildRow, "author_handle" | "posted_on" | "playlist_title">,
+  now = new Date(),
+): string {
+  return [
+    post.author_handle ? `@${post.author_handle}` : null,
+    shortDate(post.posted_on, now),
+    post.playlist_title ?? "Freed playlist",
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
 // Build step: matched -> built.
 // Creates a playlist on the Faery Spotify account with the matched tracks in
 // the poster's order. It asks for private, but Spotify currently makes it
@@ -32,7 +56,7 @@ export function creditLine(post: Pick<BuildRow, "author_handle" | "source_platfo
 export function buildPost(postId: string): Promise<StepResult> {
   return runStep<BuildRow>(
     "build", postId, "matched", "built",
-    "playlist_title, author_handle, source_platform, source_url, spotify_playlist_id",
+    "playlist_title, author_handle, source_platform, source_url, spotify_playlist_id, posted_on",
     async (post) => {
       const db = supabaseAdmin();
       const { data: items, error } = await db
@@ -47,12 +71,12 @@ export function buildPost(postId: string): Promise<StepResult> {
 
       let playlistId = post.spotify_playlist_id;
       if (!playlistId) {
-        const name = post.playlist_title ?? (post.author_handle ? `From @${post.author_handle}` : "Freed playlist");
+        const name = playlistName(post);
         const playlist = await createPlaylist(name, creditLine(post));
         playlistId = playlist.id;
         const { error: saveError } = await db
           .from("posts")
-          .update({ spotify_playlist_id: playlist.id, spotify_playlist_url: playlist.url })
+          .update({ spotify_playlist_id: playlist.id, spotify_playlist_url: playlist.url, playlist_name: name })
           .eq("id", post.id);
         if (saveError) {
           // Don't continue: a retry would create a second playlist.

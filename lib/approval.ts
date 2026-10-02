@@ -13,6 +13,7 @@ type ApprovalPost = {
   id: string;
   intake_from: string | null;
   playlist_title: string | null;
+  playlist_name: string | null;
   author_handle: string | null;
   source_platform: string | null;
   source_url: string | null;
@@ -39,7 +40,7 @@ const PLATFORM_NAMES: Record<string, string> = { threads: "Threads", x: "X" };
 // Builds the approval email (HTML and plain text) for one post.
 export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[]) {
   const e = escapeHtml;
-  const title = post.playlist_title ?? "Untitled playlist";
+  const title = post.playlist_name ?? post.playlist_title ?? "Untitled playlist";
   const who = post.author_handle ? `@${post.author_handle}` : "unknown poster";
   const where = PLATFORM_NAMES[post.source_platform ?? ""] ?? "social media";
   const matched = items.filter((i) => i.matched);
@@ -47,7 +48,8 @@ export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[]) {
   const approveUrl = `${SITE_URL}/api/approve?token=${post.approval_token}`;
   const rejectUrl = `${SITE_URL}/api/reject?token=${post.approval_token}`;
 
-  const subject = `Approve? "${title}" from ${who} (${matched.length}/${items.length} matched)`;
+  // The subject keeps the short title; the full playlist name is the heading.
+  const subject = `Approve? "${post.playlist_title ?? title}" from ${who} (${matched.length}/${items.length} matched)`;
 
   const button = (href: string, label: string, color: string) =>
     `<a href="${e(href)}" style="display:inline-block;padding:12px 22px;margin:0 8px 8px 0;border-radius:8px;background:${color};color:#fff;text-decoration:none;font-weight:600">${label}</a>`;
@@ -102,7 +104,7 @@ ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.len
 export function sendApprovalEmail(postId: string): Promise<StepResult> {
   return runStep<Omit<ApprovalPost, "id">>(
     "approval-email", postId, "built", "awaiting_approval",
-    "intake_from, playlist_title, author_handle, source_platform, source_url, spotify_playlist_url, approval_token, parse_notes",
+    "intake_from, playlist_title, playlist_name, author_handle, source_platform, source_url, spotify_playlist_url, approval_token, parse_notes",
     async (post) => {
       if (!post.intake_from) throw new PermanentError("No address to send the approval email to");
       const { data: items, error } = await supabaseAdmin()

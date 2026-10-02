@@ -1,5 +1,6 @@
 // Finding the social post in a forwarded email and reading its public text.
-// Threads: the public post page (og: tags). X: the free oEmbed endpoint.
+// Threads: the public post page (og: tags), plus its embed page for the date.
+// X: the free oEmbed endpoint.
 // Neither needs API keys.
 
 import { PermanentError } from "./errors";
@@ -11,8 +12,8 @@ export type SourcePost = {
   url: string; // canonical post URL, no tracking params
   handle: string; // without the @
   text: string;
+  postedOn: string | null; // YYYY-MM-DD, when the platform shows it
 };
-
 
 const USER_AGENT = "Mozilla/5.0 (compatible; PlaylistFaery/1.0; +https://playlistfaery.com)";
 const TIMEOUT_MS = 15_000;
@@ -61,6 +62,16 @@ export function htmlToText(html: string): string {
   ).trim();
 }
 
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+// First "Sep 30, 2026" / "September 30, 2026" in the text -> "2026-09-30".
+export function parseDateText(text: string): string | null {
+  const m = text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? (\d{1,2}), (\d{4})\b/i);
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[1].toLowerCase()) + 1;
+  return `${m[3]}-${String(month).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+}
+
 function metaContent(html: string, property: string): string | null {
   const re = new RegExp(`<meta[^>]+property="${property}"[^>]+content="([^"]*)"`, "i");
   const m = html.match(re);
@@ -79,7 +90,24 @@ export function parseThreadsPage(html: string): SourcePost {
     url: `https://www.threads.com/@${m[1]}/post/${m[2]}`,
     handle: m[1],
     text: text.trim(),
+    postedOn: null,
   };
+}
+
+// The embed page shows "9:11 AM · Sep 30, 2026"; the main page doesn't.
+// Best effort: a missing date just means Build falls back to today's date.
+async function fetchThreadsDate(postUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${postUrl}/embed`, {
+      headers: { "user-agent": USER_AGENT, "accept-language": "en" },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const m = (await res.text()).match(/\d{1,2}:\d{2}\s?[AP]M[^A-Za-z]{1,12}([A-Z][a-z]{2,8}\.? \d{1,2}, \d{4})/);
+    return m ? parseDateText(m[1]) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchThreadsPost(link: string): Promise<SourcePost> {
@@ -90,7 +118,8 @@ export async function fetchThreadsPost(link: string): Promise<SourcePost> {
   });
   if (res.status === 404) throw new PermanentError("Threads post not found (deleted or private?)");
   if (!res.ok) throw new Error(`Threads returned HTTP ${res.status}`);
-  return parseThreadsPage(await res.text());
+  const post = parseThreadsPage(await res.text());
+  return { ...post, postedOn: await fetchThreadsDate(post.url) };
 }
 
 export function parseXOembed(json: { url?: string; author_url?: string; html?: string }): SourcePost {
@@ -102,6 +131,8 @@ export function parseXOembed(json: { url?: string; author_url?: string; html?: s
     url: `https://x.com/${m[1]}/status/${m[2]}`,
     handle: m[1],
     text: htmlToText(p[1]),
+    // The blockquote ends with "&mdash; Name (@handle) <a href=...>March 21, 2006</a>".
+    postedOn: parseDateText(json.html!.slice(json.html!.lastIndexOf("</p>"))),
   };
 }
 
