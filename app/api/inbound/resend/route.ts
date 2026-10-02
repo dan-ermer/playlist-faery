@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { logEvent } from "@/lib/events";
 import { decideIntake } from "@/lib/intake";
 import { advancePost, advanceStalePosts } from "@/lib/pipeline";
 import { verifyWebhook } from "@/lib/resend";
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
   // Each new post also nudges any others that got stuck (the daily cron is the
   // fallback; Vercel Hobby only allows crons once a day).
   if (postId) after(async () => {
+    await logEvent(postId, "intake", "received", { to: "received", message: email.subject ?? null });
     await advancePost(postId);
     await advanceStalePosts();
   });

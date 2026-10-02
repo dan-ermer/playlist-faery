@@ -1,5 +1,7 @@
 import "server-only";
+import { sendFailureAlert } from "@/lib/alerts";
 import { PermanentError, WaitError } from "@/lib/errors";
+import { logEvent } from "@/lib/events";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // Temporary failures are retried this many times per step before the post is marked failed.
@@ -15,6 +17,8 @@ export type StepResult = "advanced" | "skipped" | "retry" | "failed";
 // `work` does the step and returns the columns to save; on success the post
 // moves to `to`. Safe to call repeatedly: it only acts while the post is still
 // in `from`, and every update is guarded on that status. Never throws.
+// Every run is recorded in post_events (started, then its outcome), and a
+// post that ends up failed triggers an alert email to Dan.
 export async function runStep<Row>(
   step: string,
   postId: string,
@@ -35,6 +39,8 @@ export async function runStep<Row>(
   }
   if (post.status !== from) return "skipped";
 
+  const startedAt = Date.now();
+  await logEvent(postId, step, "started", { from });
   try {
     const fields = await work(post);
     const { error } = await db
@@ -45,12 +51,14 @@ export async function runStep<Row>(
     if (error?.code === "23505") throw new PermanentError(`Duplicate value: ${error.details ?? error.message}`);
     if (error) throw new Error(`Database update failed: ${error.message}`);
     console.log(`[${step}] done`, { postId, to });
+    await logEvent(postId, step, "advanced", { from, to, durationMs: Date.now() - startedAt });
     return "advanced";
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (err instanceof WaitError) {
       await db.from("posts").update({ error: `${step}: ${message}` }).eq("id", postId).eq("status", from);
       console.warn(`[${step}] waiting`, { postId, message });
+      await logEvent(postId, step, "waiting", { from, message, durationMs: Date.now() - startedAt });
       return "retry";
     }
     const attempts = (post.attempts ?? 0) + 1;
@@ -61,6 +69,13 @@ export async function runStep<Row>(
       .eq("id", postId)
       .eq("status", from);
     console.warn(`[${step}] ${giveUp ? "failed" : "will retry"}`, { postId, attempts, message });
+    await logEvent(postId, step, giveUp ? "failed" : "retry", {
+      from,
+      to: giveUp ? "failed" : null,
+      message: giveUp ? message : `attempt ${attempts} of ${MAX_ATTEMPTS}: ${message}`,
+      durationMs: Date.now() - startedAt,
+    });
+    if (giveUp) await sendFailureAlert(postId, message);
     return giveUp ? "failed" : "retry";
   }
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { sendApprovalEmail } from "@/lib/approval";
 import { buildPost } from "@/lib/build";
 import { capturePost } from "@/lib/capture";
+import { logEvent } from "@/lib/events";
 import { matchPost } from "@/lib/match";
 import { parsePost } from "@/lib/parse";
 import type { PostStatus, StepResult } from "@/lib/step";
@@ -29,8 +30,8 @@ export async function advancePost(postId: string): Promise<PostStatus | null> {
   return status();
 }
 
-// Statuses with an automatic next step (see STEPS).
-const AUTOMATIC = Object.keys(STEPS) as PostStatus[];
+// Statuses with an automatic next step (see STEPS); also what the daily stuck-post check watches.
+export const AUTOMATIC_STATUSES = Object.keys(STEPS) as PostStatus[];
 
 // Retries posts stuck in an automatic status, oldest first. Only touches posts
 // not updated for `staleMinutes`, so it never races the webhook's own run, and
@@ -42,7 +43,7 @@ export async function advanceStalePosts({ staleMinutes = 10, limit = 20 } = {}) 
   const { data: stale, error } = await db
     .from("posts")
     .select("id, status, updated_at")
-    .in("status", AUTOMATIC)
+    .in("status", AUTOMATIC_STATUSES)
     .lt("updated_at", cutoff)
     .order("updated_at")
     .limit(limit);
@@ -57,6 +58,7 @@ export async function advanceStalePosts({ staleMinutes = 10, limit = 20 } = {}) 
       .eq("updated_at", post.updated_at)
       .select("id");
     if (!claimed?.length) continue; // someone else got it
+    await logEvent(post.id, "sweep", "claimed", { from: post.status, message: `untouched since ${post.updated_at}` });
     results.push({ id: post.id, from: post.status, to: await advancePost(post.id) });
   }
   if (results.length) console.log("[sweep] advanced stale posts", results);

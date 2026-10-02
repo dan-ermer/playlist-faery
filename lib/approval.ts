@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { PLATFORM_NAMES } from "@/lib/sources";
 import { PermanentError } from "@/lib/errors";
+import { logEvent } from "@/lib/events";
 import { resend } from "@/lib/resend";
 import { PLAYLIST_LIMIT, playlistCount } from "@/lib/limits";
 import { runStep, type StepResult } from "@/lib/step";
@@ -161,5 +162,9 @@ export async function decide(token: string, decision: Decision) {
   if (!updated?.length) return { ok: false as const, reason: "already" as const, post };
 
   console.log(`[${decision}]`, { postId: post.id });
+  await logEvent(post.id, "decision", decision === "approve" ? "approved" : "rejected", {
+    from: "awaiting_approval",
+    to: decision === "approve" ? "approved" : "rejected",
+  });
   return { ok: true as const, post };
 }

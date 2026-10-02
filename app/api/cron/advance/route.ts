@@ -1,5 +1,6 @@
+import { sendStuckDigest } from "@/lib/alerts";
 import { warnIfNearPlaylistLimit } from "@/lib/limits";
-import { advanceStalePosts } from "@/lib/pipeline";
+import { AUTOMATIC_STATUSES, advanceStalePosts } from "@/lib/pipeline";
 
 // Gives the sweep time to work through several posts (Claude + Spotify calls).
 export const maxDuration = 300;
@@ -14,5 +15,7 @@ export async function GET(request: Request) {
   }
   const results = await advanceStalePosts();
   const playlists = await warnIfNearPlaylistLimit();
-  return Response.json({ ok: true, advanced: results, playlists });
+  // After the sweep: anything still stuck for over an hour gets emailed to Dan.
+  const stuck = await sendStuckDigest(AUTOMATIC_STATUSES);
+  return Response.json({ ok: true, advanced: results, playlists, stuck });
 }
