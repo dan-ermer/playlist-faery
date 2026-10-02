@@ -30,6 +30,9 @@ export const ParsedPost = z.object({
       artist: z.string().nullable(),
       title: z.string().nullable().describe("Song title, if the item names a song."),
       album: z.string().nullable().describe("Album title, if the item names an album."),
+      suggested_titles: z
+        .array(z.string())
+        .describe("Only for items naming an artist alone: 3 song titles by that artist that fit the post (see instructions). Empty for songs and albums."),
     }),
   ),
   notes: z
@@ -49,6 +52,8 @@ How to read the list:
 - If an entry names an artist and an album rather than a song, fill album and leave title null. If it names only an artist, leave both null.
 - list_type: artist_songs when items are mostly songs, artist_albums when mostly albums, artists when mostly artists alone, playlist_link when the post shares an existing playlist (Spotify, Apple Music, YouTube...) instead of listing music.
 - If you are unsure about an item, still include it with your best reading and mention it in notes. Never invent items that aren't in the post.
+
+suggested_titles (artist-only items): suggest 3 songs by that artist for the playlist, to be searched on Spotify. They should fit the post's theme when it has one (e.g. a list of singers or vocalists -> songs where that person sings lead; "autumn songs" -> songs that suit autumn) and otherwise represent the artist well while being a little unpredictable: mix a well-loved signature song with strong deeper cuts rather than giving their three biggest hits. Use exact official song titles. Leave the list empty for song and album items.
 
 playlist_title: short and natural. Use the poster's own title if the post has one (e.g. "10 Random Tunes"); otherwise describe the list's theme in a few words. Don't include the poster's handle; credit is added separately.`;
 
@@ -126,7 +131,7 @@ export function parsePost(postId: string): Promise<StepResult> {
       const items =
         parsed.list_type === "playlist_link"
           ? parsed.playlist_url
-            ? [{ raw_text: parsed.playlist_url, artist: null, title: null, album: null }]
+            ? [{ raw_text: parsed.playlist_url, artist: null, title: null, album: null, suggested_titles: [] }]
             : []
           : parsed.items;
       if (items.length === 0) {
@@ -144,6 +149,7 @@ export function parsePost(postId: string): Promise<StepResult> {
           artist: item.artist,
           title: item.title,
           album: item.album,
+          suggested_titles: item.suggested_titles.length ? item.suggested_titles : null,
         })),
       );
       if (insError) throw new Error(`Could not save items: ${insError.message}`);

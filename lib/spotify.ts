@@ -21,7 +21,7 @@ export type SpotifyTrack = {
   track_number?: number;
 };
 
-type SpotifyAlbum = {
+export type SpotifyAlbum = {
   id: string;
   name: string;
   album_type: string;
@@ -59,13 +59,39 @@ async function getAppToken(): Promise<string> {
   return appToken.value;
 }
 
-async function get<T>(path: string): Promise<T> {
+// Spaces out Spotify requests from this process (about 8 per second), since
+// big lists can otherwise burst into a long rate-limit penalty.
+let nextSlot = 0;
+async function pace(): Promise<void> {
+  const now = Date.now();
+  const at = Math.max(now, nextSlot);
+  nextSlot = at + 125;
+  if (at > now) await new Promise((r) => setTimeout(r, at - now));
+}
+
+// Spotify's "retry after" in seconds. Short waits are retried in place; long
+// ones (Spotify escalates when it's been hammered) make the post wait for the
+// next sweep instead of using up its attempts.
+function rateLimited(res: Response): number {
+  return Number(res.headers.get("retry-after") ?? "2");
+}
+const rateLimitWait = (secs: number) =>
+  new WaitError(`Spotify rate limit: asked to wait ${Math.round(secs / 60)} min; will retry on the next sweep`);
+
+async function get<T>(path: string, attempt = 1): Promise<T> {
+  await pace();
   const res = await fetch(`${API}${path}`, {
     headers: { authorization: `Bearer ${await getAppToken()}` },
     signal: AbortSignal.timeout(15_000),
   });
   if (res.status === 429) {
-    throw new Error(`Spotify rate limit; retry after ${res.headers.get("retry-after") ?? "?"}s`);
+    const wait = rateLimited(res);
+    if (wait > 10) throw rateLimitWait(wait);
+    if (attempt <= 3) {
+      await new Promise((r) => setTimeout(r, (wait + Math.random()) * 1000));
+      return get<T>(path, attempt + 1);
+    }
+    throw new Error(`Spotify rate limit; retry after ${wait}s`);
   }
   if (!res.ok) throw new Error(`Spotify GET ${path.split("?")[0]} failed: HTTP ${res.status}`);
   return (await res.json()) as T;
@@ -75,8 +101,8 @@ async function get<T>(path: string): Promise<T> {
 // escape for quotes, so drop them.
 const quoted = (s: string) => `"${s.replace(/"/g, "")}"`;
 
-export async function searchTracks(q: string, offset = 0): Promise<SpotifyTrack[]> {
-  const params = new URLSearchParams({ q, type: "track", limit: "10", offset: String(offset), market: MARKET });
+export async function searchTracks(q: string, offset = 0, limit = 10): Promise<SpotifyTrack[]> {
+  const params = new URLSearchParams({ q, type: "track", limit: String(limit), offset: String(offset), market: MARKET });
   const data = await get<{ tracks: { items: (SpotifyTrack | null)[] } }>(`/search?${params}`);
   return data.tracks.items.filter((t): t is SpotifyTrack => !!t);
 }
@@ -85,6 +111,23 @@ export async function searchAlbums(q: string): Promise<SpotifyAlbum[]> {
   const params = new URLSearchParams({ q, type: "album", limit: "10", market: MARKET });
   const data = await get<{ albums: { items: (SpotifyAlbum | null)[] } }>(`/search?${params}`);
   return data.albums.items.filter((a): a is SpotifyAlbum => !!a);
+}
+
+export async function searchArtists(name: string): Promise<{ id: string; name: string }[]> {
+  const params = new URLSearchParams({ q: name, type: "artist", limit: "10", market: MARKET });
+  const data = await get<{ artists: { items: ({ id: string; name: string } | null)[] } }>(`/search?${params}`);
+  return data.artists.items.filter((a): a is { id: string; name: string } => !!a);
+}
+
+// One page of an artist's releases of one kind, newest first. Dev mode allows
+// at most 10 per page (not documented; "Invalid limit" above that).
+export async function artistAlbums(
+  artistId: string,
+  group: "album" | "compilation",
+  offset = 0,
+): Promise<{ items: SpotifyAlbum[]; total: number }> {
+  const params = new URLSearchParams({ include_groups: group, limit: "10", offset: String(offset), market: MARKET });
+  return get<{ items: SpotifyAlbum[]; total: number }>(`/artists/${artistId}/albums?${params}`);
 }
 
 export async function albumTracks(album: SpotifyAlbum): Promise<SpotifyTrack[]> {
@@ -194,6 +237,7 @@ async function getUserToken(): Promise<string> {
 }
 
 async function userRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  await pace();
   const res = await fetch(`${API}${path}`, {
     method,
     headers: { authorization: `Bearer ${await getUserToken()}`, "content-type": "application/json" },
@@ -202,7 +246,9 @@ async function userRequest<T>(method: string, path: string, body?: unknown): Pro
   });
   if (res.status === 401) throw new WaitError(REAUTH);
   if (res.status === 429) {
-    throw new Error(`Spotify rate limit; retry after ${res.headers.get("retry-after") ?? "?"}s`);
+    const wait = rateLimited(res);
+    if (wait > 10) throw rateLimitWait(wait);
+    throw new Error(`Spotify rate limit; retry after ${wait}s`);
   }
   if (!res.ok) throw new Error(`Spotify ${method} ${path} failed: HTTP ${res.status} ${await res.text()}`);
   const text = await res.text(); // some endpoints return an empty body
