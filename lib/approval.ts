@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { PLATFORM_NAMES } from "@/lib/sources";
 import { PermanentError } from "@/lib/errors";
 import { resend } from "@/lib/resend";
@@ -102,7 +103,7 @@ ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.len
 
 // Approval email step: matched -> awaiting_approval (the playlist is built only after approval).
 // Emails the person who forwarded the post (always an ALLOWED_SENDERS address).
-// Resend's idempotency key makes a retry within 24h a no-op instead of a second email.
+// Resend's idempotency key (per post and content) makes a retry within 24h a no-op.
 export function sendApprovalEmail(postId: string): Promise<StepResult> {
   return runStep<Omit<ApprovalPost, "id">>(
     "approval-email", postId, "matched", "awaiting_approval",
@@ -120,7 +121,9 @@ export function sendApprovalEmail(postId: string): Promise<StepResult> {
       const { subject, html, text } = renderApprovalEmail(post, items ?? [], await playlistCount());
       const { error: sendError } = await resend().emails.send(
         { from: FROM, to: post.intake_from, replyTo: REPLY_TO, subject, html, text },
-        { idempotencyKey: `approval-email/${post.id}` },
+        // Keyed on the content: a retry of the same email is a no-op, but a re-run
+        // with a different tracklist (e.g. after a fix) sends a fresh email.
+        { idempotencyKey: `approval-email/${post.id}/${createHash("sha256").update(html).digest("hex").slice(0, 16)}` },
       );
       if (sendError) throw new Error(`Resend: ${sendError.message}`);
       return {};
