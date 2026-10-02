@@ -1,7 +1,14 @@
 import "server-only";
 import { PermanentError } from "@/lib/errors";
 import { getReceivedEmail } from "@/lib/resend";
-import { fetchThreadsPost, fetchXPost, findSourceLink, htmlToText, type SourcePost } from "@/lib/sources";
+import {
+  fetchInstagramPost,
+  fetchThreadsPost,
+  fetchXPost,
+  findSourceLink,
+  htmlToText,
+  type SourcePost,
+} from "@/lib/sources";
 import { runStep, type StepResult } from "@/lib/step";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -30,12 +37,13 @@ export function capturePost(postId: string): Promise<StepResult> {
 }
 
 type CapturedFields = {
-  source_platform: "threads" | "x" | "other" | null;
+  source_platform: "threads" | "x" | "instagram" | "other" | null;
   source_url: string | null;
   author_handle: string | null;
   post_text: string | null;
   screenshot_path: string | null;
   posted_on?: string | null;
+  post_image_url?: string | null;
 };
 
 async function captureFields(emailId: string): Promise<CapturedFields> {
@@ -58,6 +66,16 @@ async function captureFields(emailId: string): Promise<CapturedFields> {
   let post: SourcePost | null = null;
   if (link?.platform === "threads") post = await fetchThreadsPost(link.url);
   if (link?.platform === "x") post = await fetchXPost(link.url);
+  if (link?.platform === "instagram") {
+    try {
+      post = await fetchInstagramPost(link.url);
+    } catch (err) {
+      // With a screenshot attached the post can still go ahead; the link just
+      // couldn't add the handle and date (Instagram may block us at any time).
+      if (!screenshot_path) throw err;
+      console.warn("[capture] Instagram page unreadable; using the screenshot", { emailId, err: String(err) });
+    }
+  }
 
   if (post) {
     return {
@@ -67,22 +85,20 @@ async function captureFields(emailId: string): Promise<CapturedFields> {
       post_text: post.text,
       screenshot_path,
       posted_on: post.postedOn,
+      // A screenshot Dan attached takes priority over the post's own picture.
+      post_image_url: screenshot_path ? null : (post.imageUrl ?? null),
     };
   }
   if (screenshot_path) {
-    // Screenshot only, or a link we can't read yet (e.g. Instagram): Parse reads the image.
+    // Screenshot only (Parse reads the image, the handle and the app it's from),
+    // or a link we couldn't read.
     return {
-      source_platform: link ? "other" : null,
+      source_platform: link ? (link.platform === "instagram" ? "instagram" : "other") : null,
       source_url: link ? link.url.split("?")[0] : null,
       author_handle: null,
       post_text: null,
       screenshot_path,
     };
   }
-  if (link?.platform === "instagram") {
-    throw new PermanentError(
-      "Instagram links can't be read yet (Phase 4). Forward a screenshot of the post instead.",
-    );
-  }
-  throw new PermanentError("No Threads/X link or screenshot found in the email");
+  throw new PermanentError("No Threads, X or Instagram link or screenshot found in the email");
 }

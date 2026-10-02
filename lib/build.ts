@@ -1,4 +1,5 @@
 import "server-only";
+import { PLATFORM_NAMES } from "@/lib/sources";
 import { PermanentError } from "@/lib/errors";
 import { createPlaylist, replacePlaylistItems } from "@/lib/spotify";
 import { runStep, type StepResult } from "@/lib/step";
@@ -13,7 +14,6 @@ type BuildRow = {
   posted_on: string | null;
 };
 
-const PLATFORM_NAMES: Record<string, string> = { threads: "Threads", x: "X" };
 
 // The credit line in the playlist description, e.g.
 // "Songs from @kirstyahood's post on Threads: https://... · Freed by Playlist Faery · playlistfaery.com"

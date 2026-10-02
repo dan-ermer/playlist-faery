@@ -1,4 +1,5 @@
 import "server-only";
+import { PLATFORM_NAMES } from "@/lib/sources";
 import { PermanentError } from "@/lib/errors";
 import { resend } from "@/lib/resend";
 import { PLAYLIST_LIMIT, playlistCount } from "@/lib/limits";
@@ -35,7 +36,6 @@ type ApprovalItem = {
 export const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-const PLATFORM_NAMES: Record<string, string> = { threads: "Threads", x: "X" };
 
 // Builds the approval email (HTML and plain text) for one post.
 export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[], playlistsSoFar: number) {

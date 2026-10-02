@@ -1,18 +1,21 @@
 // Finding the social post in a forwarded email and reading its public text.
 // Threads: the public post page (og: tags), plus its embed page for the date.
-// X: the free oEmbed endpoint.
+// X: the free oEmbed endpoint. Instagram: the public post page (og: tags and image).
 // Neither needs API keys.
 
 import { PermanentError } from "./errors";
 
 export type Platform = "threads" | "x" | "instagram";
 
+export const PLATFORM_NAMES: Record<string, string> = { threads: "Threads", x: "X", instagram: "Instagram" };
+
 export type SourcePost = {
-  platform: "threads" | "x";
+  platform: "threads" | "x" | "instagram";
   url: string; // canonical post URL, no tracking params
   handle: string; // without the @
   text: string;
   postedOn: string | null; // YYYY-MM-DD, when the platform shows it
+  imageUrl?: string | null; // the post's own picture, when the list may be in it (Instagram)
 };
 
 const USER_AGENT = "Mozilla/5.0 (compatible; PlaylistFaery/1.0; +https://playlistfaery.com)";
@@ -149,4 +152,38 @@ export async function fetchXPost(link: string): Promise<SourcePost> {
   }
   if (!res.ok) throw new Error(`X oEmbed returned HTTP ${res.status}`);
   return parseXOembed(await res.json());
+}
+
+// Instagram's public post page: og:url has the handle and post id, and
+// og:description reads 'N likes, M comments - handle on September 27, 2026: "caption".'
+// The list itself is often in the picture, so og:image is passed on for Claude to read.
+export function parseInstagramPage(html: string): SourcePost {
+  const ogUrl = metaContent(html, "og:url");
+  const description = metaContent(html, "og:description");
+  const m = ogUrl?.match(/instagram\.com\/(?:([\w.]+)\/)?(p|reel|tv)\/([\w-]+)/);
+  if (!m || !description) {
+    throw new PermanentError("Instagram didn't show this post publicly (login wall?). Forward a screenshot of it instead.");
+  }
+  const d = description.match(/([\w.]+) on ([A-Z][a-z]+ \d{1,2}, \d{4}): "([\s\S]*)"\.?\s*$/);
+  return {
+    platform: "instagram",
+    url: `https://www.instagram.com/${m[2]}/${m[3]}/`,
+    handle: m[1] ?? d?.[1] ?? "",
+    text: (d?.[3] ?? description).trim(),
+    postedOn: d ? parseDateText(d[2]) : null,
+    imageUrl: metaContent(html, "og:image"),
+  };
+}
+
+export async function fetchInstagramPost(link: string): Promise<SourcePost> {
+  const res = await fetch(link, {
+    headers: { "user-agent": USER_AGENT, "accept-language": "en" },
+    redirect: "follow",
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (res.status === 404) throw new PermanentError("Instagram post not found (deleted or private?)");
+  if (!res.ok) throw new Error(`Instagram returned HTTP ${res.status}`);
+  const post = parseInstagramPage(await res.text());
+  if (!post.handle) throw new PermanentError("Couldn't find the poster's handle on the Instagram page");
+  return post;
 }
