@@ -61,7 +61,7 @@ Domain: **playlistfaery.com**. Handle everywhere: **@playlistfaery**. Contact ad
 
 ## Environment variables
 
-Stored in Vercel (Production, Preview, Development). Pull locally with `vercel env pull .env.local`. **Never commit `.env*` files and never hard-code keys.**
+Stored in Vercel, **Production only** (not Preview/Development). Pull locally with `vercel env pull --environment=production .env.local`; variables marked Sensitive come back as the literal `[SENSITIVE]`, so paste those values into `.env.local` by hand (this bit `ANTHROPIC_API_KEY` once). New variables only reach the live site after a redeploy. **Never commit `.env*` files and never hard-code keys.**
 
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: safe for the browser
 - `SUPABASE_SECRET_KEY`: full database access; **server-only**, never import into client components
@@ -77,7 +77,7 @@ If a new secret is needed, tell Dan the variable name and where to get the value
 
 ## Data model
 
-Proposed first migration (`supabase/migrations/*_create_posts.sql`). Check whether it has been applied before re-creating it.
+All migrations live in `supabase/migrations/` and are applied (check with `supabase migration list`). Run CLI commands with `< /dev/null`: `supabase migration new` otherwise waits for SQL on stdin.
 
 - `post_status` enum values: `received, captured, parsed, matched, built, awaiting_approval, approved, published, rejected, failed`. The enum's declared order is historical; the flow is `matched → awaiting_approval → approved → built → published` (Build moved after approval in Oct 2026). Nothing compares statuses by order.
 - `post_events`: append-only history per post (`step`, `kind`, `from_status`/`to_status`, `message`, `duration_ms`); RLS on, no policies.
@@ -90,18 +90,30 @@ Schema changes always go through `supabase migration new <name>` + `supabase db 
 
 ## Platform constraints (as of Sept 2026; re-check docs before building each integration)
 
-- **Spotify**: development mode needs the app owner on Premium (done) and allows max 5 users (only Faery logs in). Refresh tokens expire ~6 months after the original login, so re-authorize the Faery account about twice a year and surface a clear error when that happens. Redirect URIs registered: `https://playlistfaery.com/api/spotify/callback` and `http://127.0.0.1:3000/api/spotify/callback` (Spotify rejects "localhost").
+- **Spotify**: development mode needs the app owner on Premium (done) and allows max 5 users (only Faery logs in). Observed in dev mode (Oct 2026): `public: false` is silently ignored; `/artists/{id}/albums` caps `limit` at 10; hammering search escalates 429 Retry-After to ~1 hour, which blocks production too (test one post at a time); an account is "generally limited to 11000 playlists". Refresh tokens expire ~6 months after the original login, so re-authorize the Faery account about twice a year and surface a clear error when that happens. Redirect URIs registered: `https://playlistfaery.com/api/spotify/callback` and `http://127.0.0.1:3000/api/spotify/callback` (Spotify rejects "localhost").
 - **Threads**: Meta app "Playlist Faery" created with threads_basic, threads_content_publish, threads_manage_replies, threads_read_replies and threads_manage_mentions. playlistfaery is a Threads Tester. Replying to *other people's* posts requires threads_manage_mentions or threads_keyword_search and may need Meta App Review; verify when building Phase 2. Callback URLs registered: `/api/threads/callback`, `/api/threads/uninstall`, `/api/threads/delete`. Limit: 1,000 API replies per 24h.
 - **X** (Phase 3): replies via the self-serve API only work if the original author @mentioned or quoted the account. Quote-posts are Enterprise-only, so the Faery post links to the original instead. Costs roughly $0.40 per playlist. The account should carry X's "Automated" label.
 
 ## Build phases
 
-1. **Phase 1 (current)**: email intake → capture → parse → Spotify playlist → approval email. No social posting.
-2. **Phase 2**: Threads reply + Faery post; public catalog page; privacy/terms pages; Faery bio encouraging @mentions.
+1. **Phase 1 (current, nearly done)**: email intake → capture → parse → match → approval email → Spotify playlist on approval. No social posting.
+2. **Phase 2**: Threads reply + Faery post; privacy/terms pages; Faery bio encouraging @mentions. (The public catalog page was pulled forward and is live.)
 3. **Phase 3**: X posting (replies for mention-sourced posts only).
 4. **Phase 4**: Amazon Music, then Apple Music / YouTube Music. (Instagram as a source was pulled forward and works since Oct 2026.)
 
-Phase 1 checklist: posts table and statuses → inbound email handler → post capture (X/Threads links + screenshots) → Claude parsing prompt and output schema → Spotify matching and pick rules → playlist creation with credit and unmatched notes → approval email with one-tap Approve → scheduled function advancing statuses → test on ~10 real posts of each input type.
+Phase 1 checklist (status as of 2026-10-02):
+- [x] Posts table and statuses
+- [x] Inbound email handler (`add@in.playlistfaery.com`, sender allowlist, DMARC)
+- [x] Post capture: Threads, X, Instagram links and screenshots
+- [x] Claude parsing prompt and output schema (incl. theme-aware suggested songs)
+- [x] Spotify matching and pick rules (short-name fallback, pacing, rate-limit waits)
+- [x] Playlist creation with credit and unmatched notes (after approval; `@handle - mm/dd/yy - title`)
+- [x] Approval email with Approve/Reject (two taps by design, see step 5)
+- [x] Scheduled function advancing statuses (daily cron + sweep on each forward), history and failure alerts
+- [ ] Test on ~10 real posts of each input type (done so far: ~15 song lists, ~8 artist lists, ~4 album lists, 5 screenshots, 2 X, 6 Instagram; still thin on X, albums and shared playlist links)
+
+Extras built ahead of plan: public catalog homepage, Instagram source, playlist-cap counter.
+Known gaps: recreating shared playlist links (recorded as unmatched); carousels/reels need a screenshot; X posts whose list is only in an attached image.
 
 ## Conventions
 
