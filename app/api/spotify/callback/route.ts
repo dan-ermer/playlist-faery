@@ -1,17 +1,8 @@
 import { type NextRequest } from "next/server";
+import { escapeHtml as escape, messagePage } from "@/lib/message-page";
 import { exchangeCode, redirectUri, saveLogin, storedAccountId } from "@/lib/spotify";
 
-function page(status: number, message: string) {
-  return new Response(
-    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">` +
-      `<title>Playlist Faery · Spotify</title>` +
-      `<body style="font-family:system-ui;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.5">` +
-      `<p>${message}</p></body>`,
-    { status, headers: { "content-type": "text/html; charset=utf-8" } },
-  );
-}
-
-const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const page = (status: number, message: string) => messagePage(status, "Spotify", message);
 
 // Step 2: Spotify sends Dan back here with a one-time code. We check the state,
 // trade the code for tokens, and store them for the Faery account.

@@ -1,6 +1,7 @@
 import { sendStuckDigest } from "@/lib/alerts";
 import { warnIfNearPlaylistLimit } from "@/lib/limits";
 import { AUTOMATIC_STATUSES, advanceStalePosts } from "@/lib/pipeline";
+import { renewThreadsTokenIfDue } from "@/lib/threads";
 
 // Gives the sweep time to work through several posts (Claude + Spotify calls).
 export const maxDuration = 300;
@@ -17,5 +18,10 @@ export async function GET(request: Request) {
   const playlists = await warnIfNearPlaylistLimit();
   // After the sweep: anything still stuck for over an hour gets emailed to Dan.
   const stuck = await sendStuckDigest(AUTOMATIC_STATUSES);
-  return Response.json({ ok: true, advanced: results, playlists, stuck });
+  // Keep the 60-day Threads token alive; a renewal failure is reported, not fatal.
+  const threadsToken = await renewThreadsTokenIfDue().catch((err) => {
+    console.error("[cron] Threads token renewal failed", err);
+    return "error";
+  });
+  return Response.json({ ok: true, advanced: results, playlists, stuck, threadsToken });
 }
