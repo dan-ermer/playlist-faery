@@ -1,5 +1,7 @@
 import "server-only";
 import { decide, escapeHtml as e, postForToken, type Decision } from "@/lib/approval";
+import { after } from "next/server";
+import { buildPost } from "@/lib/build";
 import { advancePost } from "@/lib/pipeline";
 
 const LABELS: Record<Decision, { verb: string; done: string; color: string }> = {
@@ -59,7 +61,9 @@ export function decisionRoute(decision: Decision) {
       if (decision === "reject") return page(200, `<p>✓ ${done} ${describe(result.post)}.</p>`);
       // Approved: build the playlist now so the link can be shown. If Spotify
       // is unavailable, the post stays approved and the sweep builds it later.
-      await advancePost(result.post.id);
+      // Distribute (Threads posts, ~5-30s) carries on after the page responds.
+      await buildPost(result.post.id);
+      after(() => advancePost(result.post.id));
       const built = await postForToken(token);
       return page(
         200,

@@ -156,3 +156,97 @@ export async function renewThreadsTokenIfDue(now = new Date()): Promise<"none" |
   if (error) throw new Error(`Could not save renewed Threads token: ${error.message}`);
   return "renewed";
 }
+
+// ---------------------------------------------------------------------------
+// Posting and replying as @playlistfaery
+
+async function threadsGet<T>(path: string, token: string): Promise<T> {
+  const res = await fetch(`${GRAPH}/v1.0/${path}`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (res.status === 401) throw new WaitError(REAUTH);
+  return graphJson<T>(res, `GET ${path.split("?")[0]}`);
+}
+
+// Threads counts emoji as their UTF-8 byte length toward the 500-character limit.
+export function threadsLength(text: string): number {
+  return [...text].reduce((n, ch) => n + (/[\u0000-\u007f]/.test(ch) ? 1 : Buffer.byteLength(ch, "utf8")), 0);
+}
+
+// Publishes a text post (or a reply, with replyToId) and returns its id and link.
+// Two steps: prepare a container, wait until Threads says it's ready, publish.
+export async function publishText(opts: {
+  text: string;
+  replyToId?: string;
+  linkAttachment?: string;
+}): Promise<{ id: string; permalink: string }> {
+  if (threadsLength(opts.text) > 500) throw new Error(`Threads text too long (${threadsLength(opts.text)}/500)`);
+  const { token, accountId } = await getThreadsToken();
+  const body = new URLSearchParams({ media_type: "TEXT", text: opts.text });
+  if (opts.replyToId) body.set("reply_to_id", opts.replyToId);
+  if (opts.linkAttachment) body.set("link_attachment", opts.linkAttachment);
+  const prepRes = await fetch(`${GRAPH}/v1.0/me/threads`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body,
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (prepRes.status === 401) throw new WaitError(REAUTH);
+  const { id: containerId } = await graphJson<{ id: string }>(prepRes, "prepare post");
+
+  // Text containers are usually ready at once; Meta suggests waiting up to ~30s.
+  for (let i = 0; i < 15; i++) {
+    const { status, error_message } = await threadsGet<{ status: string; error_message?: string }>(
+      `${containerId}?fields=status,error_message`,
+      token,
+    );
+    if (status === "FINISHED") break;
+    if (status === "ERROR" || status === "EXPIRED") throw new Error(`Threads couldn't prepare the post: ${error_message ?? status}`);
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+
+  const pubRes = await fetch(`${GRAPH}/v1.0/${accountId}/threads_publish`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: new URLSearchParams({ creation_id: containerId }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const { id } = await graphJson<{ id: string }>(pubRes, "publish post");
+  const { permalink } = await threadsGet<{ permalink: string }>(`${id}?fields=permalink`, token);
+  return { id, permalink };
+}
+
+// The shortcode in a Threads post link ("…/post/DeCiUMpkcAw").
+export function threadsShortcode(url: string): string | null {
+  return url.match(/threads\.(?:com|net)\/@[^/]+\/post\/([A-Za-z0-9_-]+)/)?.[1] ?? null;
+}
+
+type FoundPost = { id: string; permalink?: string };
+
+// Finds a forwarded Threads post's API id. Link ids and API ids are unrelated,
+// so it has to come from mentions (posts that tag @playlistfaery) or keyword
+// search (any public post, once Meta approves threads_keyword_search; until
+// then search only covers our own posts). Matched on the link's shortcode.
+export async function findThreadsPostId(post: {
+  sourceUrl: string;
+  handle: string | null;
+  text: string | null;
+}): Promise<string | null> {
+  const code = threadsShortcode(post.sourceUrl);
+  if (!code) return null;
+  const { token } = await getThreadsToken();
+  const match = (list: FoundPost[]) => list.find((p) => p.permalink && threadsShortcode(p.permalink) === code)?.id ?? null;
+
+  const mentions = await threadsGet<{ data?: FoundPost[] }>("me/mentions?fields=id,permalink&limit=50", token);
+  const fromMentions = match(mentions.data ?? []);
+  if (fromMentions) return fromMentions;
+
+  // Search by the post's opening words, narrowed to its author.
+  const words = (post.text ?? "").replace(/https?:\/\/\S+/g, " ").split(/\s+/).filter(Boolean).slice(0, 8).join(" ");
+  if (!words) return null;
+  const params = new URLSearchParams({ q: words, search_type: "RECENT", fields: "id,permalink", limit: "25" });
+  if (post.handle) params.set("author_username", post.handle);
+  const results = await threadsGet<{ data?: FoundPost[] }>(`keyword_search?${params}`, token);
+  return match(results.data ?? []);
+}

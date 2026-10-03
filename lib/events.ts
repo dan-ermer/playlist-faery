@@ -3,7 +3,7 @@ import type { PostStatus } from "@/lib/step";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export type EventKind =
-  | "received" | "started" | "advanced" | "retry" | "waiting" | "failed" | "claimed" | "approved" | "rejected";
+  | "received" | "started" | "advanced" | "retry" | "waiting" | "failed" | "claimed" | "approved" | "rejected" | "note";
 
 export type PostEvent = {
   at: string;
