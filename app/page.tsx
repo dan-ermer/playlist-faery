@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { connection } from "next/server";
+import { Crown } from "@/app/_components/crown";
 import { getCatalog, type CatalogEntry } from "@/lib/catalog";
 import { PLATFORM_NAMES } from "@/lib/sources";
+import styles from "./page.module.css";
 
 // "2026-09-30" -> "Sep 30, 2026" (no time zone shifting: it's a calendar date).
 function formatDate(ymd: string): string {
@@ -13,52 +16,47 @@ function formatDate(ymd: string): string {
   });
 }
 
+// "wished by @handle on Threads · Oct 1, 2026", the handle linked to the post.
 function Credit({ entry }: { entry: CatalogEntry }) {
   const where = PLATFORM_NAMES[entry.platform ?? ""];
-  const who = entry.handle ? `@${entry.handle}` : "a post";
-  const label = where ? `${who} on ${where}` : who;
+  const who = entry.handle ? `@${entry.handle}${where ? ` on ${where}` : ""}` : where ? `on ${where}` : null;
   return (
-    <p className="text-sm text-muted">
-      from{" "}
-      {entry.postUrl ? (
-        <a href={entry.postUrl} className="underline decoration-border underline-offset-2 hover:text-foreground">
-          {label}
-        </a>
-      ) : (
-        label
+    <span className={styles.credit}>
+      wished{" "}
+      {who && (
+        <>
+          {entry.handle ? "by " : ""}
+          {entry.postUrl ? <a href={entry.postUrl}>{who}</a> : who}
+        </>
       )}
       {entry.date && <> · {formatDate(entry.date)}</>}
-    </p>
+    </span>
   );
 }
 
-function PlaylistCard({ entry }: { entry: CatalogEntry }) {
+function PlaylistTile({ entry }: { entry: CatalogEntry }) {
   const shown = entry.artists.slice(0, 4);
   const more = entry.artists.length - shown.length;
   return (
-    <li className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-5 shadow-sm">
-      <div className="flex flex-col gap-1">
-        <h2 className="font-display text-2xl leading-tight">{entry.title}</h2>
-        <Credit entry={entry} />
-      </div>
-      {shown.length > 0 && (
-        <p className="text-sm leading-relaxed">
-          {shown.join(", ")}
-          {more > 0 && <span className="text-muted"> and {more} more</span>}
-        </p>
-      )}
-      <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-        <span className="text-sm text-muted">
+    <article className={styles.tile}>
+      <span className={styles.poof} aria-hidden="true">
+        ★ Poof!
+      </span>
+      <h2 className={styles.title}>{entry.title}</h2>
+      <Credit entry={entry} />
+      <p className={styles.artists}>
+        {shown.join(", ")}
+        {more > 0 && <> and {more} more</>}
+      </p>
+      <div className={styles.foot}>
+        <span className={styles.tracks}>
           {entry.trackCount} {entry.trackCount === 1 ? "track" : "tracks"}
         </span>
-        <a
-          href={entry.playlistUrl}
-          className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-ink hover:opacity-90"
-        >
-          Listen on Spotify
+        <a href={entry.playlistUrl} className={styles.listen} aria-label={`Listen to ${entry.title} on Spotify`}>
+          ★ Listen
         </a>
       </div>
-    </li>
+    </article>
   );
 }
 
@@ -67,46 +65,46 @@ export default async function Home() {
   const catalog = await getCatalog();
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-10 sm:px-6 sm:py-16">
-      <header className="mb-10 flex flex-col gap-4 text-center sm:mb-14">
-        <p className="text-gold text-xl" aria-hidden="true">✦ ✧ ✦</p>
-        <h1 className="font-display text-5xl sm:text-6xl">Playlist Faery</h1>
-        <p className="font-display text-xl italic text-muted">
-          Freeing playlists trapped in social media posts
-        </p>
-        <p className="mx-auto max-w-2xl leading-relaxed">
-          When someone shares a list of their favorite songs, artists or albums on Threads, X or
-          Instagram, Playlist Faery turns it into a real Spotify playlist and credits the person who
-          posted it. Here is every playlist freed so far.
+    <main className={styles.wrap}>
+      <header className={styles.hero}>
+        <h1 className={styles.wordmark}>
+          <Crown className={styles.crown} />
+          PLAYLIST FAERY
+        </h1>
+        <p className={styles.tagline}>Freeing playlists trapped in social media posts!</p>
+        <p className={styles.intro}>
+          When someone shares a list of their favorite songs, artists or albums on Threads, X or Instagram, Playlist
+          Faery turns it into a real Spotify playlist and credits the person who posted it.
         </p>
       </header>
 
       {catalog.length === 0 ? (
-        <p className="text-center text-muted">No playlists yet. The first ones are on their way.</p>
+        <p className={styles.empty}>No wishes granted yet. The first ones are on their way!</p>
       ) : (
         <>
-          <p className="mb-4 text-sm text-muted">
-            {catalog.length} {catalog.length === 1 ? "playlist" : "playlists"}, newest first
-          </p>
-          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={styles.count}>
+            <span>
+              ♛ {catalog.length} {catalog.length === 1 ? "wish" : "wishes"} granted
+            </span>
+            <small>Newest first</small>
+          </div>
+          <ul className={styles.grid}>
             {catalog.map((entry) => (
-              <PlaylistCard key={entry.id} entry={entry} />
+              <li key={entry.id}>
+                <PlaylistTile entry={entry} />
+              </li>
             ))}
           </ul>
         </>
       )}
 
-      <footer className="mt-16 border-t border-border pt-6 text-center text-sm text-muted">
+      <footer className={styles.footer}>
+        <p className={styles.footerSticker}>Every playlist credits the person whose post it came from</p>
         <p>
-          Playlist Faery · <span className="whitespace-nowrap">@playlistfaery</span> ·{" "}
-          <a href="mailto:hello@playlistfaery.com" className="underline underline-offset-2">
-            hello@playlistfaery.com
-          </a>
+          Playlist Faery · @playlistfaery · <a href="mailto:hello@playlistfaery.com">hello@playlistfaery.com</a>
         </p>
-        <p className="mt-1">Every playlist credits the person whose post it came from.</p>
-        <p className="mt-1">
-          <a href="/privacy" className="underline underline-offset-2">Privacy</a> ·{" "}
-          <a href="/terms" className="underline underline-offset-2">Terms</a>
+        <p>
+          <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link>
         </p>
       </footer>
     </main>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playlist Faery — reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Bungee+Shade&family=Chewy&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#111;--pink:#ff4fb8;--lime:#9be22d;--sky:#6fd3ff;--gold:#ffe14d;--lav:#b48cff;
+--x8:1px 1px 0 #111,2px 2px 0 #111,3px 3px 0 #111,4px 4px 0 #111,5px 5px 0 #111,6px 6px 0 #111,7px 7px 0 #111,8px 8px 0 #111;
+--x10:var(--x8),9px 9px 0 #111,10px 10px 0 #111}
+*{box-sizing:border-box}
+body{margin:0;font-family:Verdana,sans-serif;color:var(--ink);background:#eaffc9 radial-gradient(#ff4fb8 2px,transparent 2.2px) 0 0/30px 30px;}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:radial-gradient(#6fd3ff 2px,transparent 2.2px) 15px 15px/30px 30px}
+a{color:inherit}
+.wrap{max-width:960px;margin:0 auto;padding:16px 24px 48px;display:flex;flex-direction:column;gap:20px}
+.hero{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+.wordmark{position:relative;align-self:stretch;margin:4px 0 0;font:400 clamp(34px,7vw,60px)/1 'Bungee Shade',sans-serif;background:var(--pink);border:3px solid var(--ink);padding:18px 22px 18px clamp(96px,16vw,150px);box-shadow:var(--x8);transform:rotate(-2deg)}
+.crown{position:absolute;top:-17px;left:21px;font:clamp(100px,17vw,160px)/1 Verdana,sans-serif;color:var(--gold);-webkit-text-stroke:4px var(--ink);text-shadow:6px 6px 0 var(--ink);transform:rotate(-10deg)}
+.tagline{font:21px 'Chewy',cursive;background:var(--lime);border:3px solid var(--ink);padding:4px 12px;margin-top:6px;box-shadow:4px 4px 0 var(--ink);transform:rotate(1deg)}
+.intro{max-width:60ch;line-height:1.5;font-size:14px;margin:0}
+.count{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--ink);padding-bottom:6px;font:15px 'Bungee',sans-serif}
+.count small{font:bold 12px Verdana,sans-serif}
+.grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:26px}
+.tile{position:relative;height:100%;border:3px solid var(--ink);padding:14px 12px 12px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--x8);transition:transform .1s,box-shadow .1s}
+.tile:hover,.tile:focus-within{transform:translate(-2px,-2px);box-shadow:var(--x10)}
+.tile:active{transform:translate(8px,8px);box-shadow:none}
+.grid li:nth-child(4n+1) .tile{background:var(--pink)}.grid li:nth-child(4n+2) .tile{background:var(--lime)}
+.grid li:nth-child(4n+3) .tile{background:var(--sky)}.grid li:nth-child(4n+4) .tile{background:var(--lav)}
+.poof{position:absolute;top:-14px;right:-10px;background:var(--gold);border:3px solid var(--ink);border-radius:999px;padding:2px 10px;font:16px 'Chewy',cursive;box-shadow:2px 2px 0 var(--ink)}
+.grid li:nth-child(4n+1) .poof{transform:rotate(-6deg)}.grid li:nth-child(4n+2) .poof{transform:rotate(5deg)}
+.grid li:nth-child(4n+3) .poof{transform:rotate(-4deg)}.grid li:nth-child(4n+4) .poof{transform:rotate(7deg)}
+.tile h2{margin:0;font:400 17px/1.15 'Bungee',sans-serif;padding-right:30px;text-wrap:pretty}
+.credit{align-self:flex-start;font-size:11px;font-weight:bold;background:#fff;border:2px solid var(--ink);padding:3px 6px}
+.artists{margin:0;font-size:12px;line-height:1.45;flex:1}
+.foot{display:flex;justify-content:space-between;align-items:center}
+.tracks{background:var(--ink);color:#fff;padding:3px 7px;font:12px 'Bungee',sans-serif}
+.listen{font-size:12px;font-weight:bold;text-decoration:none}
+.listen:focus-visible,.credit a:focus-visible{outline:3px dashed var(--ink);outline-offset:4px}
+.btn{font:15px 'Bungee',sans-serif;padding:10px 20px;border:3px solid var(--ink);box-shadow:2px 2px 0 #111,4px 4px 0 #111,6px 6px 0 #111;background:#fff;color:var(--ink);cursor:pointer;transition:transform .08s,box-shadow .08s}
+.btn--primary{background:var(--pink);color:#fff;text-shadow:2px 2px 0 var(--ink)}
+.btn:active{transform:translate(6px,6px);box-shadow:none}
+@media (prefers-reduced-motion:reduce){.tile,.btn{transition:none}}
+</style></head>
+<body><main class="wrap">
+  <header class="hero">
+    <h1 class="wordmark"><span class="crown" aria-hidden="true">♛</span>PLAYLIST FAERY</h1>
+    <div class="tagline">Freeing playlists trapped in social media posts!</div>
+    <p class="intro">When someone shares a list of their favorite songs, artists or albums on Threads, X or Instagram, Playlist Faery turns it into a real Spotify playlist and credits the person who posted it.</p>
+  </header>
+  <div class="count"><span>♛ 25 wishes granted</span><small>Newest first</small></div>
+  <ul class="grid">
+    <li><article class="tile"><span class="poof">★ Poof!</span><h2>Adolescent Music Running Playlist</h2><span class="credit">wished by <a href="#">@kleinsongs on Threads</a> · Oct 2, 2026</span><p class="artists">Joe Satriani, Rush, Van Halen, The Doors and 6 more</p><div class="foot"><span class="tracks">11 tracks</span><a class="listen" href="#">★ Listen</a></div></article></li>
+    <li><article class="tile"><span class="poof">★ Poof!</span><h2>Top Songs of September</h2><span class="credit">wished by <a href="#">@airbudswidget on Instagram</a> · Oct 1, 2026</span><p class="artists">Malcolm Todd, Olivia Rodrigo, Steve Lacy, TV Girl and 9 more</p><div class="foot"><span class="tracks">19 tracks</span><a class="listen" href="#">★ Listen</a></div></article></li>
+    <li><article class="tile"><span class="poof">★ Poof!</span><h2>9+/10 Rap Albums</h2><span class="credit">wished by <a href="#">@pinata_records on Instagram</a> · Jul 30, 2026</span><p class="artists">A Tribe Called Quest, Wu-Tang Clan, Mobb Deep, Raekwon and 13 more</p><div class="foot"><span class="tracks">21 tracks</span><a class="listen" href="#">★ Listen</a></div></article></li>
+    <li><article class="tile"><span class="poof">★ Poof!</span><h2>Top 10 Favorite Radiohead Songs</h2><span class="credit">wished by <a href="#">@meonapicnictable on Threads</a> · Oct 1, 2026</span><p class="artists">Radiohead</p><div class="foot"><span class="tracks">10 tracks</span><a class="listen" href="#">★ Listen</a></div></article></li>
+  </ul>
+  <div style="display:flex;gap:16px"><button class="btn btn--primary">★ Listen on Spotify</button><button class="btn">Original post</button></div>
+</main></body></html>

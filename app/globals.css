@@ -1,45 +1,43 @@
 @import "tailwindcss";
 
-/* Storybook palette: warm paper, ink, forest green, faded gold. */
+/* "Extruded Arcade ✦ Poof!" design tokens (design_handoff/README.md). */
 :root {
-  --background: #f6f0e3;
-  --surface: #fffaf0;
-  --foreground: #2a2318;
-  --muted: #6e6352;
-  --border: #e2d6bd;
-  --accent: #2f5d46;
-  --accent-ink: #fffaf0;
-  --gold: #a8842c;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #16130e;
-    --surface: #211c15;
-    --foreground: #efe6d2;
-    --muted: #b3a68c;
-    --border: #3a3226;
-    --accent: #7fb795;
-    --accent-ink: #16130e;
-    --gold: #d6b25e;
-  }
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-gold: var(--gold);
-  --font-sans: var(--font-geist-sans);
-  --font-display: var(--font-fell);
+  --ink: #111;
+  --pink: #ff4fb8;
+  --lime: #9be22d;
+  --sky: #6fd3ff;
+  --gold: #ffe14d;
+  --lav: #b48cff;
+  --paper: #fff;
+  /* Hard, unblurred extrusion: n stacked 1px steps, down-right. */
+  --x8: 1px 1px 0 #111, 2px 2px 0 #111, 3px 3px 0 #111, 4px 4px 0 #111, 5px 5px 0 #111, 6px 6px 0 #111,
+    7px 7px 0 #111, 8px 8px 0 #111;
+  --x10: var(--x8), 9px 9px 0 #111, 10px 10px 0 #111;
+  --x-button: 2px 2px 0 #111, 4px 4px 0 #111, 6px 6px 0 #111;
+  --font-body: Verdana, Geneva, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-body);
+  /* Polka dots on lime cream: pink dots, with sky dots offset half a cell. */
+  background-color: #eaffc9;
+  background-image:
+    radial-gradient(#ff4fb8 2px, transparent 2.2px),
+    radial-gradient(#6fd3ff 2px, transparent 2.2px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+}
+
+/* Tailwind's reset strips link underlines; links in text should look like links. */
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+:focus-visible {
+  outline: 3px dashed var(--ink);
+  outline-offset: 4px;
 }

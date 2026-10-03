@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, IM_Fell_English } from "next/font/google";
+import { Bungee, Bungee_Shade, Chewy } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-// Old-timey printing type for the name and playlist titles ("Faery" on purpose).
-const fell = IM_Fell_English({
-  variable: "--font-fell",
-  weight: "400",
-  style: ["normal", "italic"],
-  subsets: ["latin"],
-});
+// "Extruded Arcade ✦ Poof!" type: Bungee for headings and labels, Bungee Shade
+// for the wordmark only, Chewy for stickers; body text is system Verdana.
+const bungee = Bungee({ variable: "--font-bungee", weight: "400", subsets: ["latin"] });
+const bungeeShade = Bungee_Shade({ variable: "--font-bungee-shade", weight: "400", subsets: ["latin"] });
+const chewy = Chewy({ variable: "--font-chewy", weight: "400", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://playlistfaery.com"),
@@ -24,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${fell.variable} h-full antialiased`}>
+    <html lang="en" className={`${bungee.variable} ${bungeeShade.variable} ${chewy.variable} h-full`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

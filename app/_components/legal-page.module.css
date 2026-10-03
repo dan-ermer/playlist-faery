@@ -1,0 +1,70 @@
+/* Privacy, terms and deletion pages in the arcade style: a white card on the dots. */
+.wrap {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+}
+
+.home {
+  display: inline-block;
+  font: 18px var(--font-bungee-shade), sans-serif;
+  text-decoration: none;
+  background: var(--pink);
+  border: 3px solid var(--ink);
+  padding: 4px 12px;
+  box-shadow: 4px 4px 0 var(--ink);
+  transform: rotate(-2deg);
+}
+
+.card {
+  margin-top: 28px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: var(--x8);
+  padding: 24px clamp(16px, 4vw, 32px) 28px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.title {
+  margin: 0;
+  font: 400 clamp(26px, 5vw, 36px) / 1.1 var(--font-bungee), sans-serif;
+}
+
+.updated {
+  display: inline-block;
+  margin-top: 10px;
+  font: 15px var(--font-chewy), cursive;
+  background: var(--lime);
+  border: 2px solid var(--ink);
+  padding: 1px 8px;
+}
+
+.body {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.body h2 {
+  margin: 14px 0 0;
+  font: 400 17px / 1.2 var(--font-bungee), sans-serif;
+}
+
+.body p,
+.body ul {
+  margin: 0;
+}
+
+.body ul {
+  padding-left: 20px;
+  list-style: disc; /* Tailwind's reset removes bullets */
+}
+
+.footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 12px;
+}
