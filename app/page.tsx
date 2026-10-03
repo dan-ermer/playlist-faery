@@ -16,19 +16,15 @@ function formatDate(ymd: string): string {
   });
 }
 
-// "wished on @handle on Threads · Oct 1, 2026", the handle linked to the post.
+// "wished upon @handle from Threads · Oct 1, 2026", the linked part going to the post.
 function Credit({ entry }: { entry: CatalogEntry }) {
   const where = PLATFORM_NAMES[entry.platform ?? ""];
-  const who = entry.handle ? `@${entry.handle}${where ? ` on ${where}` : ""}` : where ? `on ${where}` : null;
+  const who = entry.handle ? `@${entry.handle}` : where ? "a post" : null;
+  const what = who && (where ? `${who} from ${where}` : who);
   return (
     <span className={styles.credit}>
       wished{" "}
-      {who && (
-        <>
-          {entry.handle ? "on " : ""}
-          {entry.postUrl ? <a href={entry.postUrl}>{who}</a> : who}
-        </>
-      )}
+      {what && <>upon {entry.postUrl ? <a href={entry.postUrl}>{what}</a> : what}</>}
       {entry.date && <> · {formatDate(entry.date)}</>}
     </span>
   );
