@@ -14,14 +14,16 @@ const PROVIDER = "threads";
 // The only account allowed to log in.
 export const FAERY_USERNAME = "playlistfaery";
 
-// Permissions already added to the Meta app. threads_keyword_search joins this
-// list once it's added in the dashboard (requesting an unknown scope fails the login).
+// Permissions added to the Meta app (requesting one that isn't fails the login).
+// threads_keyword_search finds forwarded posts that don't mention us; until App
+// Review approves it, searches only cover @playlistfaery's own posts.
 export const SCOPES = [
   "threads_basic",
   "threads_content_publish",
   "threads_manage_replies",
   "threads_read_replies",
   "threads_manage_mentions",
+  "threads_keyword_search",
 ];
 
 // Renew once the token is this close to expiring (the daily cron checks).
