@@ -16,7 +16,7 @@ function formatDate(ymd: string): string {
   });
 }
 
-// "wished by @handle on Threads · Oct 1, 2026", the handle linked to the post.
+// "wished on @handle on Threads · Oct 1, 2026", the handle linked to the post.
 function Credit({ entry }: { entry: CatalogEntry }) {
   const where = PLATFORM_NAMES[entry.platform ?? ""];
   const who = entry.handle ? `@${entry.handle}${where ? ` on ${where}` : ""}` : where ? `on ${where}` : null;
@@ -25,7 +25,7 @@ function Credit({ entry }: { entry: CatalogEntry }) {
       wished{" "}
       {who && (
         <>
-          {entry.handle ? "by " : ""}
+          {entry.handle ? "on " : ""}
           {entry.postUrl ? <a href={entry.postUrl}>{who}</a> : who}
         </>
       )}
@@ -71,7 +71,7 @@ export default async function Home() {
           <Crown className={styles.crown} />
           PLAYLIST FAERY
         </h1>
-        <p className={styles.tagline}>Freeing playlists trapped in social media posts!</p>
+        <p className={styles.tagline}>“I wish I could listen to that right now”</p>
         <p className={styles.intro}>
           When someone shares a list of their favorite songs, artists or albums on Threads, X or Instagram, Playlist
           Faery turns it into a real Spotify playlist and credits the person who posted it.
