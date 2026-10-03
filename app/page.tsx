@@ -104,6 +104,10 @@ export default async function Home() {
           </a>
         </p>
         <p className="mt-1">Every playlist credits the person whose post it came from.</p>
+        <p className="mt-1">
+          <a href="/privacy" className="underline underline-offset-2">Privacy</a> ·{" "}
+          <a href="/terms" className="underline underline-offset-2">Terms</a>
+        </p>
       </footer>
     </main>
   );
