@@ -1,7 +1,6 @@
 import "server-only";
 import { sendApprovalEmail } from "@/lib/approval";
 import { buildPost } from "@/lib/build";
-import { distributeEnabled, distributePost } from "@/lib/distribute";
 import { capturePost } from "@/lib/capture";
 import { logEvent } from "@/lib/events";
 import { matchPost } from "@/lib/match";
@@ -16,8 +15,6 @@ const STEPS: Partial<Record<PostStatus, (postId: string) => Promise<StepResult>>
   matched: sendApprovalEmail,
   // Build runs after Dan approves (the approve page starts it; the sweep retries it).
   approved: buildPost,
-  // Distribute posts publicly on Threads, so it only runs when switched on.
-  ...(distributeEnabled() ? { built: distributePost } : {}),
 };
 
 // Moves a post through as many steps as it can right now. Stops when a step

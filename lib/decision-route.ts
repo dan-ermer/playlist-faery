@@ -61,7 +61,6 @@ export function decisionRoute(decision: Decision) {
       if (decision === "reject") return page(200, `<p>✓ ${done} ${describe(result.post)}.</p>`);
       // Approved: build the playlist now so the link can be shown. If Spotify
       // is unavailable, the post stays approved and the sweep builds it later.
-      // Distribute (Threads posts, ~5-30s) carries on after the page responds.
       await buildPost(result.post.id);
       after(() => advancePost(result.post.id));
       const built = await postForToken(token);
