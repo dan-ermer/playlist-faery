@@ -1,7 +1,8 @@
-// Finding the social post in a forwarded email and reading its public text.
-// Threads: the public post page (og: tags), plus its embed page for the date.
-// X: the free oEmbed endpoint. Instagram: the public post page (og: tags and image).
-// Neither needs API keys.
+// Finding the social post in a forwarded email.
+// X posts are read through X's official oEmbed endpoint. Threads and Instagram
+// pages are never fetched (Instagram's Terms prohibit automated collection, and
+// Meta disabled @playlistfaery in Oct 2026): those posts come as screenshots,
+// with the link kept only for credit.
 
 import { PermanentError } from "./errors";
 
@@ -10,12 +11,11 @@ export type Platform = "threads" | "x" | "instagram";
 export const PLATFORM_NAMES: Record<string, string> = { threads: "Threads", x: "X", instagram: "Instagram" };
 
 export type SourcePost = {
-  platform: "threads" | "x" | "instagram";
+  platform: "x";
   url: string; // canonical post URL, no tracking params
   handle: string; // without the @
   text: string;
   postedOn: string | null; // YYYY-MM-DD, when the platform shows it
-  imageUrl?: string | null; // the post's own picture, when the list may be in it (Instagram)
 };
 
 const USER_AGENT = "Mozilla/5.0 (compatible; PlaylistFaery/1.0; +https://playlistfaery.com)";
@@ -75,56 +75,6 @@ export function parseDateText(text: string): string | null {
   return `${m[3]}-${String(month).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
 }
 
-function metaContent(html: string, property: string): string | null {
-  const re = new RegExp(`<meta[^>]+property="${property}"[^>]+content="([^"]*)"`, "i");
-  const m = html.match(re);
-  return m ? decodeEntities(m[1]) : null;
-}
-
-// Pure parser for a Threads post page, separated out so it can be tested on saved HTML.
-export function parseThreadsPage(html: string): SourcePost {
-  const ogUrl = metaContent(html, "og:url");
-  const text = metaContent(html, "og:description");
-  const m = ogUrl?.match(/threads\.(?:com|net)\/@([^/]+)\/post\/([^/?#]+)/);
-  if (!m) throw new Error("Threads page has no post URL (login wall or layout change?)");
-  if (!text?.trim()) throw new Error("Threads page has no post text");
-  return {
-    platform: "threads",
-    url: `https://www.threads.com/@${m[1]}/post/${m[2]}`,
-    handle: m[1],
-    text: text.trim(),
-    postedOn: null,
-  };
-}
-
-// The embed page shows "9:11 AM · Sep 30, 2026"; the main page doesn't.
-// Best effort: a missing date just means Build falls back to today's date.
-async function fetchThreadsDate(postUrl: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${postUrl}/embed`, {
-      headers: { "user-agent": USER_AGENT, "accept-language": "en" },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    const m = (await res.text()).match(/\d{1,2}:\d{2}\s?[AP]M[^A-Za-z]{1,12}([A-Z][a-z]{2,8}\.? \d{1,2}, \d{4})/);
-    return m ? parseDateText(m[1]) : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function fetchThreadsPost(link: string): Promise<SourcePost> {
-  const res = await fetch(link, {
-    headers: { "user-agent": USER_AGENT, "accept-language": "en" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (res.status === 404) throw new PermanentError("Threads post not found (deleted or private?)");
-  if (!res.ok) throw new Error(`Threads returned HTTP ${res.status}`);
-  const post = parseThreadsPage(await res.text());
-  return { ...post, postedOn: await fetchThreadsDate(post.url) };
-}
-
 export function parseXOembed(json: { url?: string; author_url?: string; html?: string }): SourcePost {
   const m = json.url?.match(/(?:x|twitter)\.com\/([^/]+)\/status\/(\d+)/);
   const p = json.html?.match(/<p[^>]*>([\s\S]*?)<\/p>/);
@@ -154,68 +104,13 @@ export async function fetchXPost(link: string): Promise<SourcePost> {
   return parseXOembed(await res.json());
 }
 
-// Instagram's public post page: og:url has the handle and post id, and
-// og:description reads 'N likes, M comments - handle on September 27, 2026: "caption".'
-// The list itself is often in the picture, so og:image is passed on for Claude to read.
-export function parseInstagramPage(html: string): SourcePost {
-  const ogUrl = metaContent(html, "og:url");
-  const description = metaContent(html, "og:description");
-  const m = ogUrl?.match(/instagram\.com\/(?:([\w.]+)\/)?(p|reel|tv)\/([\w-]+)/);
-  if (!m || !description) {
-    throw new PermanentError("Instagram didn't show this post publicly (login wall?). Forward a screenshot of it instead.");
-  }
-  const d = description.match(/([\w.]+) on ([A-Z][a-z]+ \d{1,2}, \d{4}): "([\s\S]*)"\.?\s*$/);
-  return {
-    platform: "instagram",
-    url: `https://www.instagram.com/${m[2]}/${m[3]}/`,
-    handle: m[1] ?? d?.[1] ?? "",
-    text: (d?.[3] ?? description).trim(),
-    postedOn: d ? parseDateText(d[2]) : null,
-    imageUrl: metaContent(html, "og:image"),
-  };
+// The link as Dan forwarded it, minus tracking parameters (?xmt=, ?igsh=…).
+// Used for credit and duplicate checks; never fetched.
+export function cleanLink(url: string): string {
+  return url.split(/[?#]/)[0];
 }
 
-export async function fetchInstagramPost(link: string): Promise<SourcePost> {
-  const res = await fetch(link, {
-    headers: { "user-agent": USER_AGENT, "accept-language": "en" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (res.status === 404) throw new PermanentError("Instagram post not found (deleted or private?)");
-  if (!res.ok) throw new Error(`Instagram returned HTTP ${res.status}`);
-  const post = parseInstagramPage(await res.text());
-  if (!post.handle) throw new PermanentError("Couldn't find the poster's handle on the Instagram page");
-  // og:image is a 640px square crop, which cuts off long lists; the embed page
-  // has the whole picture. Carousels still only give the first slide.
-  return { ...post, imageUrl: (await fetchInstagramFullImage(post.url)) ?? post.imageUrl };
-}
-
-// Largest image in the post's embed page (its <img class="EmbeddedMediaImage">
-// srcset, e.g. up to 1104 or 1680px wide, uncropped). Best effort: null if missing.
-export function largestEmbedImage(html: string): string | null {
-  const tag = html.match(/<img[^>]*class="EmbeddedMediaImage"[^>]*>/)?.[0];
-  if (!tag) return null;
-  const srcset = tag.match(/srcset="([^"]*)"/)?.[1];
-  if (!srcset) {
-    const src = tag.match(/src="([^"]*)"/)?.[1];
-    return src ? decodeEntities(src) : null;
-  }
-  const best = decodeEntities(srcset)
-    .split(",")
-    .map((part) => part.trim().split(/\s+/))
-    .map(([url, width]) => ({ url, width: parseInt(width ?? "0", 10) || 0 }))
-    .sort((x, y) => y.width - x.width)[0];
-  return best?.url ?? null;
-}
-
-async function fetchInstagramFullImage(postUrl: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${postUrl}embed/`, {
-      headers: { "user-agent": USER_AGENT, "accept-language": "en" },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    return res.ok ? largestEmbedImage(await res.text()) : null;
-  } catch {
-    return null;
-  }
+// Threads' share sheet titles the email "Kirsty (@kirstyahood) on Threads".
+export function handleFromSubject(subject: string | null | undefined): string | null {
+  return subject?.match(/\(@([\w.]+)\)\s+on Threads/i)?.[1] ?? null;
 }
