@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { CopyButton } from "@/app/_components/copy-button";
+import { InstagramShare } from "@/app/_components/instagram-share";
 import { postForToken } from "@/lib/approval";
-import { faeryPostText, replyText, threadsComposeUrl, xComposeUrl, xPostId } from "@/lib/share-text";
+import { faeryPostText, instagramCaption, replyText, threadsComposeUrl, xComposeUrl, xPostId } from "@/lib/share-text";
 import { PLATFORM_NAMES } from "@/lib/sources";
 import { supabaseAdmin } from "@/lib/supabase";
 import styles from "./share.module.css";
@@ -33,6 +35,8 @@ export default async function ShareKit({ params }: PageProps<"/share/[token]">) 
 
   const reply = replyText(post);
   const announce = faeryPostText(post);
+  const caption = instagramCaption(post);
+  const card = (format: "feed" | "story") => `/share/${token}/card/${format}`;
   const platform = post.source_platform as string | null;
   const where = PLATFORM_NAMES[platform ?? ""];
   const xId = platform === "x" ? xPostId(post.source_url) : null;
@@ -77,6 +81,35 @@ export default async function ShareKit({ params }: PageProps<"/share/[token]">) 
           <CopyButton text={announce} className={`${styles.btn} ${styles.lime}`} />
           <a className={styles.btn} href={threadsComposeUrl(announce)}>Post on Threads</a>
           <a className={styles.btn} href={xComposeUrl(announce)}>Post on X</a>
+        </div>
+      </section>
+
+      <section className={styles.card}>
+        <h2 className={styles.h2}>{post.source_url ? "3." : "2."} Post on Instagram</h2>
+        <p className={styles.hint}>
+          Instagram needs a picture, so here&apos;s one in two sizes. Each button copies the text you&apos;ll need, then
+          opens your phone&apos;s share menu with the picture: choose Instagram, then Feed or Story.
+          <br />
+          <b>Feed:</b> paste the caption below. Captions can&apos;t hold tappable links, so it says &ldquo;link in
+          bio&rdquo; (your bio link should be playlistfaery.com).
+          <br />
+          <b>Story:</b> the playlist link is copied. Add a Link sticker, paste it, and place it in the empty space at the
+          bottom.
+        </p>
+        <div className={styles.previews}>
+          <Image src={card("feed")} alt="Square share picture for the feed" width={1080} height={1080} unoptimized />
+          <Image src={card("story")} alt="Tall share picture for a Story" width={1080} height={1920} unoptimized />
+        </div>
+        <p className={styles.text}>{caption}</p>
+        <div className={styles.actions}>
+          <InstagramShare
+            feedImage={card("feed")}
+            storyImage={card("story")}
+            caption={caption}
+            playlistUrl={post.spotify_playlist_url}
+            className={`${styles.btn} ${styles.lime}`}
+          />
+          <CopyButton text={caption} className={styles.btn} />
         </div>
       </section>
     </Frame>

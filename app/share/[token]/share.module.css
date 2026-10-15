@@ -94,6 +94,25 @@
   background: var(--lime);
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Thumbnails of the Instagram share pictures (square and tall, same height). */
+.previews {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.previews img {
+  height: 200px;
+  width: auto;
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .btn {
     transition: none;

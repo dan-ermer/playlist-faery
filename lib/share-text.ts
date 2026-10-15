@@ -48,6 +48,17 @@ export function faeryPostText(post: ShareRow): string {
   return text;
 }
 
+// A caption for Dan's Instagram feed post (pasted under the share card image).
+// Instagram captions can't hold tappable links, so it points to the bio link;
+// creditFor's @handles work here too (Threads usernames are Instagram usernames).
+export function instagramCaption(post: ShareRow): string {
+  return [
+    `♛ Wish granted! “${post.playlist_title ?? "A freed playlist"}”, freed from ${creditFor(post)}.`,
+    ``,
+    `Listen on Spotify: link in bio ✦ playlistfaery.com`,
+  ].join("\n");
+}
+
 // A reply Dan can paste on the original post (from his own account).
 export function replyText(post: ShareRow): string {
   return [

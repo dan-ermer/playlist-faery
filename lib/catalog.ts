@@ -15,20 +15,49 @@ export type CatalogEntry = {
   artists: string[]; // first few, in playlist order, no repeats
 };
 
+const PUBLIC_COLUMNS =
+  "id, playlist_title, author_handle, source_platform, source_url, posted_on, approved_at, created_at, spotify_playlist_url";
+
 // Every playlist that exists on Spotify (Dan approved it), newest first.
 export async function getCatalog(): Promise<CatalogEntry[]> {
-  const db = supabaseAdmin();
-  const { data: posts, error } = await db
+  const { data: posts, error } = await supabaseAdmin()
     .from("posts")
-    .select("id, playlist_title, author_handle, source_platform, source_url, posted_on, approved_at, created_at, spotify_playlist_url")
+    .select(PUBLIC_COLUMNS)
     .in("status", ["built", "published"])
     .not("spotify_playlist_url", "is", null)
     .order("approved_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
   if (error) throw new Error(`Could not load catalog: ${error.message}`);
-  if (!posts?.length) return [];
+  return toEntries(posts ?? []);
+}
 
-  const { data: items, error: itemsError } = await db
+// One post's playlist, as it appears in the catalog (null until it's built).
+export async function getCatalogEntry(postId: string): Promise<CatalogEntry | null> {
+  const { data: post, error } = await supabaseAdmin()
+    .from("posts")
+    .select(PUBLIC_COLUMNS)
+    .eq("id", postId)
+    .not("spotify_playlist_url", "is", null)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load playlist: ${error.message}`);
+  return post ? (await toEntries([post]))[0] : null;
+}
+
+type PostRow = {
+  id: string;
+  playlist_title: string | null;
+  author_handle: string | null;
+  source_platform: string | null;
+  source_url: string | null;
+  posted_on: string | null;
+  approved_at: string | null;
+  created_at: string;
+  spotify_playlist_url: string | null;
+};
+
+async function toEntries(posts: PostRow[]): Promise<CatalogEntry[]> {
+  if (!posts.length) return [];
+  const { data: items, error: itemsError } = await supabaseAdmin()
     .from("post_items")
     .select("post_id, position, spotify_artists, extra_tracks")
     .in("post_id", posts.map((p) => p.id))

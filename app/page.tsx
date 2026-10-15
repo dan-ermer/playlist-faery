@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Crown } from "@/app/_components/crown";
 import { getCatalog, type CatalogEntry } from "@/lib/catalog";
+import { magicWord } from "@/lib/magic";
 import { PLATFORM_NAMES } from "@/lib/sources";
 import styles from "./page.module.css";
 
@@ -28,20 +29,6 @@ function Credit({ entry }: { entry: CatalogEntry }) {
       {entry.date && <> · {formatDate(entry.date)}</>}
     </span>
   );
-}
-
-// The sticker on each card: a magic word, picked from the playlist's id so a
-// card keeps its word between visits while the grid stays mixed up.
-// Kept short (about 9 letters) so the sticker stays on the corner, clear of the title.
-const MAGIC_WORDS = [
-  "★ Poof!", "✦ Ta-da!", "Presto!", "Shazam!", "Voilà!", "Alakazam!",
-  "Kazaam!", "✦ Zing!", "Bibbidi!", "★ Zap!", "Sparkle!", "Huzzah!",
-];
-
-function magicWord(id: string): string {
-  let h = 0;
-  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return MAGIC_WORDS[h % MAGIC_WORDS.length];
 }
 
 function PlaylistTile({ entry }: { entry: CatalogEntry }) {
