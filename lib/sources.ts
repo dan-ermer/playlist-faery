@@ -114,3 +114,20 @@ export function cleanLink(url: string): string {
 export function handleFromSubject(subject: string | null | undefined): string | null {
   return subject?.match(/\(@([\w.]+)\)\s+on Threads/i)?.[1] ?? null;
 }
+
+// What Dan typed in the email around the link ("two per artist", "do the whole
+// album"): the body minus links, signatures, and forwarded or quoted text.
+export function extractInstructions(body: string): string | null {
+  const cut = body.search(
+    /^(-{2,}\s*Forwarded message|Begin forwarded message|On .+wrote:\s*$|From: .+$)/im,
+  );
+  const lines = (cut >= 0 ? body.slice(0, cut) : body)
+    .replace(/https?:\/\/\S+/g, " ")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith(">"))
+    .filter((l) => !/^(sent from my|get outlook for)\b/i.test(l))
+    .filter((l) => !/^--\s*$/.test(l));
+  const text = lines.join("\n").trim();
+  return text ? text.slice(0, 1000) : null;
+}

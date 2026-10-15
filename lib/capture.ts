@@ -1,7 +1,15 @@
 import "server-only";
 import { PermanentError } from "@/lib/errors";
 import { getReceivedEmail } from "@/lib/resend";
-import { cleanLink, fetchXPost, findSourceLink, handleFromSubject, htmlToText, type SourcePost } from "@/lib/sources";
+import {
+  cleanLink,
+  extractInstructions,
+  fetchXPost,
+  findSourceLink,
+  handleFromSubject,
+  htmlToText,
+  type SourcePost,
+} from "@/lib/sources";
 import { runStep, type StepResult } from "@/lib/step";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -36,6 +44,7 @@ type CapturedFields = {
   post_text: string | null;
   screenshot_path: string | null;
   screenshot_paths: string[] | null;
+  instructions: string | null;
   posted_on?: string | null;
 };
 
@@ -59,6 +68,8 @@ export async function captureFields(emailId: string): Promise<CapturedFields> {
 
   const body = email.text ?? htmlToText(email.html ?? "");
   const link = findSourceLink(body);
+  // Anything Dan typed travels with every capture (trusted; see Parse and Match).
+  const shotsAndNote = { ...shots, instructions: extractInstructions(body) };
 
   // X: the official oEmbed endpoint gives the text, handle and date.
   if (link?.platform === "x") {
@@ -68,7 +79,7 @@ export async function captureFields(emailId: string): Promise<CapturedFields> {
       source_url: post.url,
       author_handle: post.handle,
       post_text: post.text,
-      ...shots,
+      ...shotsAndNote,
       posted_on: post.postedOn,
     };
   }
@@ -87,13 +98,13 @@ export async function captureFields(emailId: string): Promise<CapturedFields> {
       source_url: cleanLink(link.url),
       author_handle: link.platform === "threads" ? handleFromSubject(email.subject) : null,
       post_text: null,
-      ...shots,
+      ...shotsAndNote,
     };
   }
 
   // Screenshot only: Parse reads the list, the handle, the date and the app.
   if (screenshot_path) {
-    return { source_platform: null, source_url: null, author_handle: null, post_text: null, ...shots };
+    return { source_platform: null, source_url: null, author_handle: null, post_text: null, ...shotsAndNote };
   }
   throw new PermanentError("No Threads, X or Instagram link or screenshot found in the email");
 }

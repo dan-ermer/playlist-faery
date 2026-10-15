@@ -30,14 +30,17 @@ export async function getCatalog(): Promise<CatalogEntry[]> {
 
   const { data: items, error: itemsError } = await db
     .from("post_items")
-    .select("post_id, position, spotify_artists")
+    .select("post_id, position, spotify_artists, extra_tracks")
     .in("post_id", posts.map((p) => p.id))
     .eq("matched", true)
     .order("position");
   if (itemsError) throw new Error(`Could not load catalog tracks: ${itemsError.message}`);
 
   return posts.map((p) => {
-    const tracks = (items ?? []).filter((i) => i.post_id === p.id);
+    // Each item's pick plus any extra picks (e.g. a whole album Dan asked for).
+    const tracks = (items ?? [])
+      .filter((i) => i.post_id === p.id)
+      .flatMap((i) => [i, ...((i.extra_tracks as { artists: string }[] | null) ?? []).map((t) => ({ spotify_artists: t.artists }))]);
     const artists = [
       ...new Set(tracks.map((t) => (t.spotify_artists ?? "").split(", ")[0]).filter(Boolean)),
     ];

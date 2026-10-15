@@ -60,12 +60,19 @@ export function buildPost(postId: string): Promise<StepResult> {
       const db = supabaseAdmin();
       const { data: items, error } = await db
         .from("post_items")
-        .select("spotify_uri")
+        .select("spotify_uri, extra_tracks")
         .eq("post_id", post.id)
         .eq("matched", true)
         .order("position");
       if (error) throw new Error(`Could not load items: ${error.message}`);
-      const uris = [...new Set((items ?? []).map((i) => i.spotify_uri).filter((u): u is string => !!u))];
+      // Each item's pick, then any extra picks Dan's instructions asked for, in order.
+      const uris = [
+        ...new Set(
+          (items ?? [])
+            .flatMap((i) => [i.spotify_uri, ...((i.extra_tracks as { uri: string }[] | null) ?? []).map((t) => t.uri)])
+            .filter((u): u is string => !!u),
+        ),
+      ];
       if (uris.length === 0) throw new PermanentError("No matched tracks to put in a playlist");
 
       let playlistId = post.spotify_playlist_id;

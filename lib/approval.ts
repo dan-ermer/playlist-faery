@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { PLATFORM_NAMES } from "@/lib/sources";
 import { PermanentError } from "@/lib/errors";
+import type { ExtraTrack } from "@/lib/match";
 import { logEvent } from "@/lib/events";
 import { resend } from "@/lib/resend";
 import { PLAYLIST_LIMIT, playlistCount } from "@/lib/limits";
@@ -23,6 +24,7 @@ type ApprovalPost = {
   spotify_playlist_url: string | null;
   approval_token: string;
   parse_notes: string | null;
+  instructions: string | null;
 };
 
 type ApprovalItem = {
@@ -33,6 +35,7 @@ type ApprovalItem = {
   spotify_track_id: string | null;
   spotify_track_name: string | null;
   spotify_artists: string | null;
+  extra_tracks: ExtraTrack[] | null;
 };
 
 export const escapeHtml = (s: string) =>
@@ -61,7 +64,11 @@ export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[], p
       ? `<a href="https://open.spotify.com/track/${e(i.spotify_track_id)}" style="color:#1a7f4b">${e(i.spotify_track_name ?? "track")}</a> · ${e(i.spotify_artists ?? "")}`
       : "";
     const note = i.match_note ? `<br><span style="color:#8a6d00">⚠ ${e(i.match_note)}</span>` : "";
-    return `<li style="margin-bottom:8px">${pick}<br><span style="color:#777">wrote: ${e(i.raw_text)}</span>${note}</li>`;
+    // Extra picks Dan's instructions asked for (e.g. a whole album), under their item.
+    const extras = (i.extra_tracks ?? [])
+      .map((t) => `<br>+ <a href="https://open.spotify.com/track/${e(t.id)}" style="color:#1a7f4b">${e(t.name)}</a> · ${e(t.artists)}`)
+      .join("");
+    return `<li style="margin-bottom:8px">${pick}${extras}<br><span style="color:#777">wrote: ${e(i.raw_text)}</span>${note}</li>`;
   };
 
   const html = `<!doctype html><html><body style="margin:0;padding:16px;font-family:-apple-system,system-ui,sans-serif;font-size:15px;line-height:1.45;color:#222">
@@ -70,6 +77,7 @@ export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[], p
 <p style="margin:0 0 16px;color:#555">From ${post.source_url ? `<a href="${e(post.source_url)}">${e(who)}'s post on ${where}</a>` : `${e(who)} on ${where}`} · ${matched.length} of ${items.length} matched</p>
 <p>${button(approveUrl, "Approve", "#1a7f4b")}${button(rejectUrl, "Reject", "#a33")}</p>
 ${post.spotify_playlist_url ? `<p><a href="${e(post.spotify_playlist_url)}">Open the playlist in Spotify</a></p>` : ""}
+${post.instructions ? `<p style="background:#eef6ff;padding:10px 12px;border-radius:6px">✎ <b>Your instructions:</b> ${e(post.instructions)}</p>` : ""}
 ${post.parse_notes ? `<p style="background:#fff8e1;padding:10px 12px;border-radius:6px">⚠ <b>Notes:</b> ${e(post.parse_notes)}</p>` : ""}
 <h3 style="margin:20px 0 8px">Tracklist</h3>
 <ol style="padding-left:22px;margin:0">${matched.map(trackLine).join("")}</ol>
@@ -85,12 +93,14 @@ ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.len
     `Approve: ${approveUrl}`,
     `Reject:  ${rejectUrl}`,
     post.spotify_playlist_url ? `Playlist: ${post.spotify_playlist_url}` : "",
+    post.instructions ? `\nYour instructions: ${post.instructions}` : "",
     post.parse_notes ? `\nNotes: ${post.parse_notes}` : "",
     ``,
     `TRACKLIST`,
     ...matched.map(
       (i, n) =>
-        `${n + 1}. ${i.spotify_track_name} - ${i.spotify_artists}  (wrote: ${i.raw_text})${i.match_note ? `  [! ${i.match_note}]` : ""}`,
+        `${n + 1}. ${i.spotify_track_name} - ${i.spotify_artists}  (wrote: ${i.raw_text})${i.match_note ? `  [! ${i.match_note}]` : ""}` +
+        (i.extra_tracks ?? []).map((t) => `\n   + ${t.name} - ${t.artists}`).join(""),
     ),
     ...(unmatched.length ? [``, `NOT MATCHED`, ...unmatched.map((i) => `- ${i.raw_text}: ${i.match_note ?? "No match"}`)] : []),
     ``,
@@ -108,12 +118,12 @@ ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.len
 export function sendApprovalEmail(postId: string): Promise<StepResult> {
   return runStep<Omit<ApprovalPost, "id">>(
     "approval-email", postId, "matched", "awaiting_approval",
-    "intake_from, playlist_title, playlist_name, author_handle, source_platform, source_url, spotify_playlist_url, approval_token, parse_notes",
+    "intake_from, playlist_title, playlist_name, author_handle, source_platform, source_url, spotify_playlist_url, approval_token, parse_notes, instructions",
     async (post) => {
       if (!post.intake_from) throw new PermanentError("No address to send the approval email to");
       const { data: items, error } = await supabaseAdmin()
         .from("post_items")
-        .select("position, raw_text, matched, match_note, spotify_track_id, spotify_track_name, spotify_artists")
+        .select("position, raw_text, matched, match_note, spotify_track_id, spotify_track_name, spotify_artists, extra_tracks")
         .eq("post_id", post.id)
         .order("position")
         .returns<ApprovalItem[]>();

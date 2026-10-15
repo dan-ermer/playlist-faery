@@ -265,8 +265,12 @@ export async function createPlaylist(name: string, description: string): Promise
 }
 
 // Sets the playlist's tracks to exactly these, in order (safe to repeat).
+// Spotify takes at most 100 per request: the first 100 replace whatever is
+// there, the rest are appended in batches of 100.
 export async function replacePlaylistItems(playlistId: string, uris: string[]): Promise<void> {
-  if (uris.length > 100) throw new Error("More than 100 tracks; batching isn't implemented");
-  await userRequest("PUT", `/playlists/${playlistId}/items`, { uris });
+  await userRequest("PUT", `/playlists/${playlistId}/items`, { uris: uris.slice(0, 100) });
+  for (let i = 100; i < uris.length; i += 100) {
+    await userRequest("POST", `/playlists/${playlistId}/items`, { uris: uris.slice(i, i + 100) });
+  }
 }
 
