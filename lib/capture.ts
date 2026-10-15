@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 // Capture step: received -> captured.
 // Reads the forwarded email, checks it really came from the sender (DMARC),
-// finds the post link and/or screenshot, and stores the post's text and author.
+// finds the post link and/or screenshots, and stores the post's text and author.
 export function capturePost(postId: string): Promise<StepResult> {
   return runStep<{ intake_message_id: string | null }>(
     "capture", postId, "received", "captured", "intake_message_id",
@@ -35,6 +35,7 @@ type CapturedFields = {
   author_handle: string | null;
   post_text: string | null;
   screenshot_path: string | null;
+  screenshot_paths: string[] | null;
   posted_on?: string | null;
 };
 
@@ -48,9 +49,13 @@ export async function captureFields(emailId: string): Promise<CapturedFields> {
     );
   }
 
-  // Screenshots stay in Resend; Parse downloads them by this reference.
-  const image = email.attachments.find((a) => a.content_type.startsWith("image/"));
-  const screenshot_path = image ? `resend:${emailId}/${image.id}` : null;
+  // Screenshots stay in Resend; Parse downloads them by these references, in
+  // email order. Tiny images (signature logos, tracking pixels) are skipped.
+  const paths = email.attachments
+    .filter((a) => a.content_type.startsWith("image/") && a.size >= 5_000)
+    .map((a) => `resend:${emailId}/${a.id}`);
+  const screenshot_path = paths[0] ?? null;
+  const shots = { screenshot_path, screenshot_paths: paths.length ? paths : null };
 
   const body = email.text ?? htmlToText(email.html ?? "");
   const link = findSourceLink(body);
@@ -63,7 +68,7 @@ export async function captureFields(emailId: string): Promise<CapturedFields> {
       source_url: post.url,
       author_handle: post.handle,
       post_text: post.text,
-      screenshot_path,
+      ...shots,
       posted_on: post.postedOn,
     };
   }
@@ -82,13 +87,13 @@ export async function captureFields(emailId: string): Promise<CapturedFields> {
       source_url: cleanLink(link.url),
       author_handle: link.platform === "threads" ? handleFromSubject(email.subject) : null,
       post_text: null,
-      screenshot_path,
+      ...shots,
     };
   }
 
   // Screenshot only: Parse reads the list, the handle, the date and the app.
   if (screenshot_path) {
-    return { source_platform: null, source_url: null, author_handle: null, post_text: null, screenshot_path };
+    return { source_platform: null, source_url: null, author_handle: null, post_text: null, ...shots };
   }
   throw new PermanentError("No Threads, X or Instagram link or screenshot found in the email");
 }
