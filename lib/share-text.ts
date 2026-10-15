@@ -60,14 +60,15 @@ export function replyText(post: ShareRow): string {
 // Compose links: open the app's composer pre-filled; nothing posts until Dan
 // presses Post. Threads: threads.net/intent/post. X: intent/tweet, which can
 // also pre-fill a reply to a specific post (in_reply_to).
+// Spaces must be %20, not "+": URLSearchParams writes "+", which the Threads
+// app shows literally ("Wish+granted!").
 export function threadsComposeUrl(text: string): string {
-  return `https://www.threads.net/intent/post?${new URLSearchParams({ text })}`;
+  return `https://www.threads.net/intent/post?text=${encodeURIComponent(text)}`;
 }
 
 export function xComposeUrl(text: string, inReplyTo?: string | null): string {
-  const params = new URLSearchParams({ text });
-  if (inReplyTo) params.set("in_reply_to", inReplyTo);
-  return `https://x.com/intent/tweet?${params}`;
+  const reply = inReplyTo ? `&in_reply_to=${encodeURIComponent(inReplyTo)}` : "";
+  return `https://x.com/intent/tweet?text=${encodeURIComponent(text)}${reply}`;
 }
 
 // The numeric id in an X post link ("x.com/someone/status/1234").
