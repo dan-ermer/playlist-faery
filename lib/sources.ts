@@ -5,6 +5,7 @@
 // with the link kept only for credit.
 
 import { PermanentError } from "./errors";
+import { MAX_INSTRUCTION_CHARS } from "./instructions";
 
 export type Platform = "threads" | "x" | "instagram";
 
@@ -129,5 +130,5 @@ export function extractInstructions(body: string): string | null {
     .filter((l) => !/^(sent from my|get outlook for)\b/i.test(l))
     .filter((l) => !/^--\s*$/.test(l));
   const text = lines.join("\n").trim();
-  return text ? text.slice(0, 1000) : null;
+  return text ? text.slice(0, MAX_INSTRUCTION_CHARS) : null;
 }
