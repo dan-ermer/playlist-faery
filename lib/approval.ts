@@ -52,6 +52,7 @@ export function renderApprovalEmail(post: ApprovalPost, items: ApprovalItem[], p
   const unmatched = items.filter((i) => !i.matched);
   const approveUrl = `${SITE_URL}/api/approve?token=${post.approval_token}`;
   const rejectUrl = `${SITE_URL}/api/reject?token=${post.approval_token}`;
+  const shareUrl = `${SITE_URL}/share/${post.approval_token}`;
 
   // The subject keeps the short title; the full playlist name is the heading.
   const subject = `Approve? "${post.playlist_title ?? title}" from ${who} (${matched.length}/${items.length} matched)`;
@@ -82,7 +83,7 @@ ${post.parse_notes ? `<p style="background:#fff8e1;padding:10px 12px;border-radi
 <h3 style="margin:20px 0 8px">Tracklist</h3>
 <ol style="padding-left:22px;margin:0">${matched.map(trackLine).join("")}</ol>
 ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.length})</h3><ul style="padding-left:22px;margin:0">${unmatched.map((i) => `<li style="margin-bottom:8px">${e(i.raw_text)}<br><span style="color:#8a6d00">${e(i.match_note ?? "No match")}</span></li>`).join("")}</ul>` : ""}
-<p style="margin-top:24px;color:#999;font-size:13px">Approving creates the playlist on Spotify. Nothing is posted to Threads or X yet (Phase 2).<br>Faery playlists so far: ${playlistsSoFar.toLocaleString("en-US")} of about ${PLAYLIST_LIMIT.toLocaleString("en-US")}.</p>
+<p style="margin-top:24px;color:#999;font-size:13px">Approving creates the playlist on Spotify and opens your <a href="${e(shareUrl)}">share kit</a> (ready-made reply and announcement to post yourself).<br>Faery playlists so far: ${playlistsSoFar.toLocaleString("en-US")} of about ${PLAYLIST_LIMIT.toLocaleString("en-US")}.</p>
 </div></body></html>`;
 
   const text = [
@@ -104,7 +105,8 @@ ${unmatched.length ? `<h3 style="margin:20px 0 8px">Not matched (${unmatched.len
     ),
     ...(unmatched.length ? [``, `NOT MATCHED`, ...unmatched.map((i) => `- ${i.raw_text}: ${i.match_note ?? "No match"}`)] : []),
     ``,
-    `Approving creates the playlist on Spotify. Faery playlists so far: ${playlistsSoFar} of about ${PLAYLIST_LIMIT}.`,
+    `Approving creates the playlist on Spotify. Share kit (after approving): ${shareUrl}`,
+    `Faery playlists so far: ${playlistsSoFar} of about ${PLAYLIST_LIMIT}.`,
   ]
     .filter((l) => l !== "")
     .join("\n");

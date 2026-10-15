@@ -1,5 +1,5 @@
 import "server-only";
-import { decide, escapeHtml as e, postForToken, type Decision } from "@/lib/approval";
+import { decide, escapeHtml as e, postForToken, SITE_URL, type Decision } from "@/lib/approval";
 import { after } from "next/server";
 import { buildPost } from "@/lib/build";
 import { advancePost } from "@/lib/pipeline";
@@ -56,21 +56,20 @@ export function decisionRoute(decision: Decision) {
       const result = await decide(token, decision);
       if (!result.ok && result.reason === "not-found") return page(404, "<p>This link isn't valid.</p>");
       if (!result.ok) {
-        return page(200, `<p>${describe(result.post)} was already decided; nothing changed.</p>${playlistLink(result.post)}`);
+        return page(
+          200,
+          `<p>${describe(result.post)} was already decided; nothing changed.</p>${playlistLink(result.post)}` +
+            `<p><a href="${SITE_URL}/share/${e(token)}">Open the share kit</a></p>`,
+        );
       }
       if (decision === "reject") return page(200, `<p>✓ ${done} ${describe(result.post)}.</p>`);
       // Approved: build the playlist now so the link can be shown. If Spotify
       // is unavailable, the post stays approved and the sweep builds it later.
       await buildPost(result.post.id);
       after(() => advancePost(result.post.id));
-      const built = await postForToken(token);
-      return page(
-        200,
-        `<p>✓ ${done} ${describe(result.post)}.</p>` +
-          (built?.spotify_playlist_url
-            ? playlistLink(built)
-            : "<p>The playlist will be created on Spotify shortly.</p>"),
-      );
+      // On to the share kit: the playlist link plus ready-made posts for Dan.
+      // (If Spotify was unavailable, it says the playlist is still being created.)
+      return Response.redirect(`${SITE_URL}/share/${token}`, 303);
     } catch (err) {
       console.error(`[${decision}] failed`, err);
       return page(500, "<p>Something went wrong saving that. Please try again in a minute.</p>");

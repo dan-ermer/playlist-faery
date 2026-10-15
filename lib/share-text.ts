@@ -1,5 +1,6 @@
 // Ready-to-post wording for sharing a playlist: an announcement and a reply on
-// the original post. Dan posts these himself, by hand; Playlist Faery never
+// the original post, shown on the share kit page (/share/[token]). Dan posts
+// these himself, by hand; Playlist Faery never
 // posts on Meta platforms automatically (the @playlistfaery Threads account was
 // disabled in Oct 2026 after API testing; see CLAUDE.md).
 
@@ -47,11 +48,29 @@ export function faeryPostText(post: ShareRow): string {
   return text;
 }
 
-// A reply Dan can paste on the original post.
+// A reply Dan can paste on the original post (from his own account).
 export function replyText(post: ShareRow): string {
   return [
-    `✦ Poof! Your list is now a Spotify playlist: ${post.spotify_playlist_url}`,
+    `✦ Poof! I turned your list into a Spotify playlist: ${post.spotify_playlist_url}`,
     ``,
-    `Thanks for the great picks! ♛ Playlist Faery`,
+    `Thanks for the great picks! ♛ playlistfaery.com`,
   ].join("\n");
+}
+
+// Compose links: open the app's composer pre-filled; nothing posts until Dan
+// presses Post. Threads: threads.net/intent/post. X: intent/tweet, which can
+// also pre-fill a reply to a specific post (in_reply_to).
+export function threadsComposeUrl(text: string): string {
+  return `https://www.threads.net/intent/post?${new URLSearchParams({ text })}`;
+}
+
+export function xComposeUrl(text: string, inReplyTo?: string | null): string {
+  const params = new URLSearchParams({ text });
+  if (inReplyTo) params.set("in_reply_to", inReplyTo);
+  return `https://x.com/intent/tweet?${params}`;
+}
+
+// The numeric id in an X post link ("x.com/someone/status/1234").
+export function xPostId(url: string | null): string | null {
+  return url?.match(/(?:x|twitter)\.com\/[^/]+\/status\/(\d+)/)?.[1] ?? null;
 }
